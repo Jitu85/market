@@ -1,0 +1,1042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Investment Decision Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:        #080c14;
+  --bg2:       #0d1525;
+  --bg3:       #111d30;
+  --border:    rgba(201,168,76,0.18);
+  --gold:      #c9a84c;
+  --gold2:     #f0d080;
+  --dim:       rgba(255,255,255,0.35);
+  --text:      #e8e0d0;
+  --green:     #00e676;
+  --green2:    #4ade80;
+  --yellow:    #fbbf24;
+  --red:       #f87171;
+  --blue:      #60a5fa;
+  --mono:      'JetBrains Mono', monospace;
+  --serif:     'Cormorant Garamond', serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 13px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── GRID BACKGROUND ── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(201,168,76,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(201,168,76,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ── LAYOUT ── */
+.app { position: relative; z-index: 1; max-width: 1400px; margin: 0 auto; padding: 32px 24px 80px; }
+
+/* ── HEADER ── */
+header {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+}
+
+.brand-block { display: flex; flex-direction: column; gap: 4px; }
+
+.brand-eyebrow {
+  font-family: var(--mono); font-size: 10px; font-weight: 400;
+  letter-spacing: 0.35em; text-transform: uppercase;
+  color: var(--gold); opacity: 0.7;
+}
+
+h1 {
+  font-family: var(--serif); font-size: 42px; font-weight: 300;
+  letter-spacing: -0.02em; line-height: 1;
+  color: var(--gold2);
+}
+
+h1 em { font-style: italic; color: var(--gold); }
+
+.header-meta {
+  text-align: right; font-size: 11px;
+  color: var(--dim); line-height: 1.8;
+}
+
+.live-dot {
+  display: inline-block; width: 7px; height: 7px;
+  background: var(--green); border-radius: 50%;
+  margin-right: 5px;
+  box-shadow: 0 0 8px var(--green);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+
+/* ── CAPITAL BANNER ── */
+.capital-banner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 36px;
+  overflow: hidden;
+}
+
+.cap-cell {
+  background: var(--bg2);
+  padding: 20px 24px;
+  position: relative;
+  transition: background 0.2s;
+}
+
+.cap-cell:hover { background: var(--bg3); }
+
+.cap-label {
+  font-size: 10px; letter-spacing: 0.25em; text-transform: uppercase;
+  color: var(--dim); margin-bottom: 8px;
+}
+
+.cap-value {
+  font-family: var(--serif); font-size: 28px; font-weight: 300;
+  color: var(--gold2); letter-spacing: -0.01em;
+}
+
+.cap-value.green { color: var(--green2); }
+.cap-value.yellow { color: var(--yellow); }
+.cap-value.red { color: var(--red); }
+
+.cap-sub {
+  font-size: 10px; color: var(--dim);
+  margin-top: 4px;
+}
+
+.cap-bar {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  height: 2px; background: var(--border);
+}
+
+.cap-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--gold), var(--gold2));
+  transition: width 1s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* ── CAPITAL INPUT EDITOR ── */
+.cap-edit-row {
+  display: flex; gap: 12px; align-items: center;
+  margin-bottom: 28px;
+  padding: 16px 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.cap-edit-row label { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); white-space: nowrap; }
+
+.cap-input {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--gold2);
+  font-family: var(--mono); font-size: 13px;
+  padding: 7px 12px; border-radius: 3px;
+  width: 140px; outline: none;
+  transition: border-color 0.2s;
+}
+
+.cap-input:focus { border-color: var(--gold); }
+
+.divider { flex: 1; height: 1px; background: var(--border); }
+
+.btn {
+  background: transparent; border: 1px solid var(--gold);
+  color: var(--gold); font-family: var(--mono); font-size: 11px;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 8px 20px; border-radius: 3px; cursor: pointer;
+  transition: all 0.2s;
+}
+.btn:hover { background: var(--gold); color: var(--bg); }
+.btn.primary { background: var(--gold); color: var(--bg); font-weight: 500; }
+.btn.primary:hover { background: var(--gold2); }
+
+/* ── SECTION HEADERS ── */
+.section-head {
+  display: flex; align-items: baseline; gap: 16px;
+  margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.section-title {
+  font-family: var(--serif); font-size: 22px; font-weight: 300;
+  color: var(--gold2); letter-spacing: 0.02em;
+}
+
+.section-badge {
+  font-size: 10px; letter-spacing: 0.2em; color: var(--dim);
+  text-transform: uppercase;
+}
+
+.section-actions { margin-left: auto; display: flex; gap: 8px; }
+
+/* ── CARDS GRID ── */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+/* ── INSTRUMENT CARD ── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  cursor: default;
+  animation: fadeUp 0.5s ease both;
+}
+
+@keyframes fadeUp {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  border-color: rgba(201,168,76,0.35);
+}
+
+.card.strong-buy { border-left: 3px solid var(--green); }
+.card.buy        { border-left: 3px solid var(--green2); }
+.card.watch      { border-left: 3px solid var(--yellow); }
+.card.avoid      { border-left: 3px solid var(--red); }
+
+.card-top {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: flex-start;
+}
+
+.card-symbol { font-size: 11px; color: var(--gold); letter-spacing: 0.15em; }
+.card-name   { font-family: var(--serif); font-size: 17px; color: var(--text); font-weight: 400; margin-top: 2px; line-height: 1.2; }
+.card-sector { font-size: 10px; color: var(--dim); margin-top: 3px; }
+
+.signal-badge {
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  padding: 5px 10px; border-radius: 2px; white-space: nowrap;
+  text-transform: uppercase;
+}
+.signal-badge.strong-buy { background: rgba(0,230,118,0.15); color: var(--green); border: 1px solid rgba(0,230,118,0.3); }
+.signal-badge.buy        { background: rgba(74,222,128,0.12); color: var(--green2); border: 1px solid rgba(74,222,128,0.25); }
+.signal-badge.watch      { background: rgba(251,191,36,0.12); color: var(--yellow); border: 1px solid rgba(251,191,36,0.25); }
+.signal-badge.avoid      { background: rgba(248,113,113,0.12); color: var(--red); border: 1px solid rgba(248,113,113,0.25); }
+
+.card-body { padding: 14px 18px; }
+
+.metrics-row {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-bottom: 14px;
+}
+
+.metric { display: flex; flex-direction: column; gap: 3px; }
+.metric-label { font-size: 9px; letter-spacing: 0.2em; color: var(--dim); text-transform: uppercase; }
+.metric-value { font-size: 14px; color: var(--text); }
+.metric-value.up   { color: var(--green2); }
+.metric-value.down { color: var(--red); }
+.metric-value.gold { color: var(--gold); }
+
+/* ── SCORE BAR ── */
+.score-row { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.score-label { font-size: 10px; color: var(--dim); width: 60px; flex-shrink: 0; }
+.score-track {
+  flex: 1; height: 5px; background: rgba(255,255,255,0.08);
+  border-radius: 3px; overflow: hidden;
+}
+.score-fill {
+  height: 100%; border-radius: 3px;
+  transition: width 1.2s cubic-bezier(0.4,0,0.2,1);
+}
+.score-num { font-size: 13px; font-weight: 500; width: 36px; text-align: right; }
+
+/* ── RANGE BAR ── */
+.range-row { margin-bottom: 14px; }
+.range-label { font-size: 9px; color: var(--dim); letter-spacing: 0.2em; margin-bottom: 6px; }
+.range-track {
+  height: 4px; background: rgba(255,255,255,0.08);
+  border-radius: 2px; position: relative; margin: 4px 0;
+}
+.range-fill {
+  position: absolute; top: 0; height: 100%;
+  background: linear-gradient(90deg, var(--red), var(--yellow), var(--green));
+  border-radius: 2px;
+}
+.range-cursor {
+  position: absolute; top: -4px;
+  width: 3px; height: 12px; background: var(--gold2);
+  border-radius: 1px;
+  transform: translateX(-50%);
+}
+.range-ends { display: flex; justify-content: space-between; font-size: 9px; color: var(--dim); margin-top: 3px; }
+
+/* ── CARD FOOTER ── */
+.card-footer {
+  padding: 10px 18px;
+  background: rgba(0,0,0,0.25);
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid var(--border);
+}
+
+.alloc-display { font-size: 11px; color: var(--gold); }
+.alloc-display span { font-size: 9px; color: var(--dim); }
+
+.card-actions { display: flex; gap: 6px; }
+
+.card-btn {
+  background: transparent; border: 1px solid rgba(255,255,255,0.1);
+  color: var(--dim); font-family: var(--mono); font-size: 9px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 10px; border-radius: 2px; cursor: pointer;
+  transition: all 0.15s;
+}
+.card-btn:hover { border-color: var(--gold); color: var(--gold); }
+.card-btn.invest:hover { border-color: var(--green); color: var(--green); }
+
+/* ── ADD INSTRUMENT FORM ── */
+.add-form {
+  background: var(--bg2); border: 1px dashed rgba(201,168,76,0.25);
+  border-radius: 4px; padding: 20px; margin-bottom: 48px;
+  display: none;
+}
+.add-form.open { display: block; animation: fadeUp 0.3s ease both; }
+.add-form h3 { font-family: var(--serif); font-size: 18px; color: var(--gold2); font-weight: 300; margin-bottom: 16px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 16px; }
+
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 10px; letter-spacing: 0.2em; color: var(--dim); text-transform: uppercase; }
+.field input, .field select {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); font-family: var(--mono); font-size: 12px;
+  padding: 8px 11px; border-radius: 3px; outline: none;
+  transition: border-color 0.2s;
+}
+.field input:focus, .field select:focus { border-color: var(--gold); }
+.field select option { background: var(--bg2); }
+
+/* ── LOG TABLE ── */
+.log-section { margin-top: 48px; }
+.log-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.log-table th {
+  text-align: left; padding: 10px 14px;
+  font-size: 9px; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--dim); border-bottom: 1px solid var(--border);
+}
+.log-table td { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); }
+.log-table tr:hover td { background: rgba(201,168,76,0.04); }
+
+/* ── SORT TABS ── */
+.sort-tabs { display: flex; gap: 0; margin-bottom: 16px; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; width: fit-content; }
+.sort-tab {
+  background: transparent; border: none;
+  color: var(--dim); font-family: var(--mono); font-size: 10px;
+  letter-spacing: 0.15em; text-transform: uppercase;
+  padding: 8px 16px; cursor: pointer; transition: all 0.15s;
+}
+.sort-tab.active { background: var(--gold); color: var(--bg); }
+.sort-tab:hover:not(.active) { color: var(--gold); }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--dim); }
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+.empty p { font-family: var(--serif); font-size: 18px; color: var(--dim); }
+
+/* ── TOAST ── */
+#toast {
+  position: fixed; bottom: 32px; right: 32px;
+  background: var(--bg3); border: 1px solid var(--gold);
+  color: var(--gold2); font-size: 12px;
+  padding: 12px 20px; border-radius: 4px;
+  transform: translateY(80px); opacity: 0;
+  transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+  z-index: 999; pointer-events: none;
+}
+#toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  h1 { font-size: 28px; }
+  .capital-banner { grid-template-columns: repeat(2,1fr); }
+  .cards-grid { grid-template-columns: 1fr; }
+  header { flex-direction: column; gap: 16px; align-items: flex-start; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- HEADER -->
+  <header>
+    <div class="brand-block">
+      <div class="brand-eyebrow">Personal Investment Intelligence</div>
+      <h1>Market <em>Oracle</em></h1>
+    </div>
+    <div class="header-meta">
+      <div><span class="live-dot"></span>Dashboard Active</div>
+      <div id="lastRefresh">Last refresh: —</div>
+      <div id="currentTime" style="color:var(--gold);opacity:0.8;"></div>
+    </div>
+  </header>
+
+  <!-- CAPITAL BANNER -->
+  <div class="capital-banner">
+    <div class="cap-cell">
+      <div class="cap-label">Total Capital</div>
+      <div class="cap-value" id="capTotal">₹1,00,000</div>
+      <div class="cap-sub">Available to deploy</div>
+      <div class="cap-bar"><div class="cap-bar-fill" id="deployedBar" style="width:0%"></div></div>
+    </div>
+    <div class="cap-cell">
+      <div class="cap-label">Deployed</div>
+      <div class="cap-value yellow" id="capDeployed">₹0</div>
+      <div class="cap-sub" id="capDeployedPct">0% of capital</div>
+      <div class="cap-bar"><div class="cap-bar-fill" style="width:0%;background:var(--yellow)"></div></div>
+    </div>
+    <div class="cap-cell">
+      <div class="cap-label">Remaining</div>
+      <div class="cap-value green" id="capRemaining">₹1,00,000</div>
+      <div class="cap-sub">Ready to invest</div>
+    </div>
+    <div class="cap-cell">
+      <div class="cap-label">Active Signals</div>
+      <div class="cap-value gold" id="capSignals">0</div>
+      <div class="cap-sub">Buy / Strong Buy</div>
+    </div>
+  </div>
+
+  <!-- CAPITAL EDITOR -->
+  <div class="cap-edit-row">
+    <label>CAPITAL ₹</label>
+    <input class="cap-input" id="totalCapital" type="number" value="100000" placeholder="100000">
+    <label>STOCKS %</label>
+    <input class="cap-input" id="stockPct" type="number" value="60" min="0" max="100" style="width:80px">
+    <label>MF %</label>
+    <input class="cap-input" id="mfPct" type="number" value="40" min="0" max="100" style="width:80px">
+    <div class="divider"></div>
+    <button class="btn primary" onclick="recalcCapital()">Recalculate</button>
+  </div>
+
+  <!-- STOCKS SECTION -->
+  <div class="section-head">
+    <div class="section-title">Equities</div>
+    <div class="section-badge" id="stockCount">0 instruments</div>
+    <div class="section-actions">
+      <div class="sort-tabs">
+        <button class="sort-tab active" onclick="sortCards('stocks','score')">Score</button>
+        <button class="sort-tab" onclick="sortCards('stocks','name')">Name</button>
+        <button class="sort-tab" onclick="sortCards('stocks','price')">Price</button>
+      </div>
+      <button class="btn" onclick="toggleAddForm('stock')">+ Add Stock</button>
+    </div>
+  </div>
+
+  <!-- ADD STOCK FORM -->
+  <div class="add-form" id="addStockForm">
+    <h3>Add Equity to Watchlist</h3>
+    <div class="form-grid">
+      <div class="field"><label>NSE/BSE Symbol</label><input id="s_symbol" placeholder="NSE:RELIANCE"></div>
+      <div class="field"><label>Company Name</label><input id="s_name" placeholder="Reliance Industries"></div>
+      <div class="field"><label>Sector</label><input id="s_sector" placeholder="Energy"></div>
+      <div class="field"><label>Current Price ₹</label><input id="s_price" type="number" placeholder="2750"></div>
+      <div class="field"><label>52W High ₹</label><input id="s_high" type="number" placeholder="3200"></div>
+      <div class="field"><label>52W Low ₹</label><input id="s_low" type="number" placeholder="2100"></div>
+      <div class="field"><label>P/E Ratio</label><input id="s_pe" type="number" placeholder="24.5"></div>
+      <div class="field"><label>Target Price ₹</label><input id="s_target" type="number" placeholder="2600"></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn primary" onclick="addStock()">Add to Dashboard</button>
+      <button class="btn" onclick="toggleAddForm('stock')">Cancel</button>
+    </div>
+  </div>
+
+  <div class="cards-grid" id="stockCards"></div>
+
+  <!-- MF SECTION -->
+  <div class="section-head">
+    <div class="section-title">Mutual Funds</div>
+    <div class="section-badge" id="mfCount">0 schemes</div>
+    <div class="section-actions">
+      <div class="sort-tabs">
+        <button class="sort-tab active" onclick="sortCards('mf','score')">Score</button>
+        <button class="sort-tab" onclick="sortCards('mf','name')">Name</button>
+        <button class="sort-tab" onclick="sortCards('mf','cagr')">CAGR</button>
+      </div>
+      <button class="btn" onclick="toggleAddForm('mf')">+ Add Fund</button>
+    </div>
+  </div>
+
+  <!-- ADD MF FORM -->
+  <div class="add-form" id="addMFForm">
+    <h3>Add Mutual Fund to Watchlist</h3>
+    <div class="form-grid">
+      <div class="field"><label>AMFI Scheme Code</label><input id="m_code" placeholder="120503"></div>
+      <div class="field"><label>Scheme Name</label><input id="m_name" placeholder="Mirae Asset Large Cap"></div>
+      <div class="field"><label>Category</label>
+        <select id="m_cat">
+          <option>Large Cap</option><option>Mid Cap</option><option>Small Cap</option>
+          <option>Flexi Cap</option><option>ELSS</option><option>Debt</option><option>Hybrid</option>
+        </select>
+      </div>
+      <div class="field"><label>Current NAV ₹</label><input id="m_nav" type="number" placeholder="105.50"></div>
+      <div class="field"><label>1Y Low NAV ₹</label><input id="m_low" type="number" placeholder="88.00"></div>
+      <div class="field"><label>1Y High NAV ₹</label><input id="m_high" type="number" placeholder="112.00"></div>
+      <div class="field"><label>1Y CAGR %</label><input id="m_cagr1" type="number" placeholder="18.5"></div>
+      <div class="field"><label>3Y CAGR %</label><input id="m_cagr3" type="number" placeholder="14.2"></div>
+      <div class="field"><label>Target NAV ₹</label><input id="m_target" type="number" placeholder="98"></div>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn primary" onclick="addMF()">Add to Dashboard</button>
+      <button class="btn" onclick="toggleAddForm('mf')">Cancel</button>
+    </div>
+  </div>
+
+  <div class="cards-grid" id="mfCards"></div>
+
+  <!-- DECISION LOG -->
+  <div class="log-section">
+    <div class="section-head">
+      <div class="section-title">Decision Log</div>
+      <div class="section-badge" id="logCount">0 entries</div>
+      <div class="section-actions">
+        <button class="btn" onclick="clearLog()">Clear Log</button>
+      </div>
+    </div>
+    <table class="log-table">
+      <thead>
+        <tr>
+          <th>Time</th><th>Type</th><th>Instrument</th>
+          <th>Price / NAV</th><th>Score</th><th>Signal</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+    <div class="empty" id="logEmpty">
+      <div class="empty-icon">📋</div>
+      <p>No decisions recorded yet</p>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ================================================================
+//  STATE
+// ================================================================
+let state = {
+  stocks : [],
+  mfs    : [],
+  log    : [],
+  capital: { total: 100000, stockPct: 60, mfPct: 40 },
+};
+
+// Load from localStorage
+(function loadState() {
+  try {
+    const saved = localStorage.getItem('marketOracle_v2');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      state = { ...state, ...parsed };
+      document.getElementById('totalCapital').value = state.capital.total;
+      document.getElementById('stockPct').value     = state.capital.stockPct;
+      document.getElementById('mfPct').value        = state.capital.mfPct;
+    }
+  } catch(e) {}
+  // Seed demo data if empty
+  if (!state.stocks.length) seedDemoData();
+  renderAll();
+})();
+
+function saveState() {
+  try { localStorage.setItem('marketOracle_v2', JSON.stringify(state)); } catch(e) {}
+}
+
+// ================================================================
+//  SCORING ENGINE
+// ================================================================
+function calcStockScore(price, high52, low52, pe, target) {
+  let score = 0;
+  if (high52 && low52 && high52 > low52) {
+    const pos = (price - low52) / (high52 - low52);
+    score += Math.round((1 - pos) * 40);
+  }
+  if (high52 && high52 > 0) {
+    const drop = ((high52 - price) / high52) * 100;
+    score += Math.min(35, Math.round(drop * 0.875));
+  }
+  if (pe && pe > 0) {
+    score += Math.min(25, Math.max(0, Math.round(25 - ((pe - 10) / 30) * 25)));
+  } else { score += 12; }
+  if (target > 0 && price <= target) score = Math.min(100, score + 10);
+  return Math.min(100, Math.max(0, score));
+}
+
+function calcMFScore(nav, low1y, high1y, cagr1y, cagr3y, target) {
+  let score = 0;
+  if (high1y && low1y && high1y > low1y) {
+    const pos = (nav - low1y) / (high1y - low1y);
+    score += Math.round((1 - pos) * 35);
+  }
+  if (cagr1y) score += Math.min(35, Math.max(0, Math.round(cagr1y * 1.75)));
+  if (cagr3y) score += Math.min(20, Math.max(0, Math.round(cagr3y * 1.33)));
+  if (target > 0 && nav <= target) score = Math.min(100, score + 10);
+  return Math.min(100, Math.max(0, score));
+}
+
+function scoreToSignal(s) {
+  if (s >= 80) return { label: 'STRONG BUY', cls: 'strong-buy', icon: '⚡' };
+  if (s >= 65) return { label: 'BUY',         cls: 'buy',        icon: '✅' };
+  if (s >= 45) return { label: 'WATCH',       cls: 'watch',      icon: '👁' };
+  return             { label: 'AVOID',        cls: 'avoid',      icon: '⛔' };
+}
+
+function scoreColor(s) {
+  if (s >= 80) return 'var(--green)';
+  if (s >= 65) return 'var(--green2)';
+  if (s >= 45) return 'var(--yellow)';
+  return 'var(--red)';
+}
+
+// ================================================================
+//  CAPITAL CALCULATION
+// ================================================================
+function recalcCapital() {
+  state.capital.total    = parseFloat(document.getElementById('totalCapital').value) || 100000;
+  state.capital.stockPct = parseFloat(document.getElementById('stockPct').value)    || 60;
+  state.capital.mfPct    = parseFloat(document.getElementById('mfPct').value)       || 40;
+  distributeCapital();
+  renderAll();
+  saveState();
+  toast('Capital recalculated');
+}
+
+function distributeCapital() {
+  const { total, stockPct, mfPct } = state.capital;
+  const stockBudget = total * stockPct / 100;
+  const mfBudget    = total * mfPct   / 100;
+  allocateBudget(state.stocks, stockBudget, s => calcStockScore(s.price, s.high52, s.low52, s.pe, s.target));
+  allocateBudget(state.mfs,    mfBudget,    m => calcMFScore(m.nav, m.low1y, m.high1y, m.cagr1y, m.cagr3y, m.target));
+}
+
+function allocateBudget(items, budget, scoreFn) {
+  items.forEach(i => i.allocated = 0);
+  const eligible = items.filter(i => scoreFn(i) >= 65);
+  const total = eligible.reduce((s, i) => s + scoreFn(i), 0);
+  if (!total) return;
+  eligible.forEach(i => { i.allocated = Math.round((scoreFn(i) / total) * budget); });
+}
+
+// ================================================================
+//  RENDER
+// ================================================================
+function renderAll() {
+  distributeCapital();
+  renderStocks();
+  renderMFs();
+  renderCapitalBanner();
+  renderLog();
+  updateTime();
+}
+
+function renderCapitalBanner() {
+  const { total } = state.capital;
+  const deployed = [
+    ...state.stocks.map(s => s.allocated || 0),
+    ...state.mfs.map(m => m.allocated || 0)
+  ].reduce((a,b) => a+b, 0);
+  const remaining = total - deployed;
+  const pct = total > 0 ? Math.round((deployed/total)*100) : 0;
+  const signals = [
+    ...state.stocks.map(s => calcStockScore(s.price, s.high52, s.low52, s.pe, s.target)),
+    ...state.mfs.map(m => calcMFScore(m.nav, m.low1y, m.high1y, m.cagr1y, m.cagr3y, m.target)),
+  ].filter(s => s >= 65).length;
+
+  document.getElementById('capTotal').textContent     = fmt(total);
+  document.getElementById('capDeployed').textContent  = fmt(deployed);
+  document.getElementById('capDeployedPct').textContent = pct + '% of capital';
+  document.getElementById('capRemaining').textContent = fmt(remaining);
+  document.getElementById('capSignals').textContent   = signals;
+  document.getElementById('deployedBar').style.width  = pct + '%';
+  document.getElementById('lastRefresh').textContent  = 'Last refresh: ' + new Date().toLocaleTimeString('en-IN');
+}
+
+function renderStocks() {
+  const container = document.getElementById('stockCards');
+  document.getElementById('stockCount').textContent = state.stocks.length + ' instruments';
+  if (!state.stocks.length) {
+    container.innerHTML = emptyState('No stocks added yet');
+    return;
+  }
+  container.innerHTML = state.stocks.map((s, idx) => stockCard(s, idx)).join('');
+}
+
+function renderMFs() {
+  const container = document.getElementById('mfCards');
+  document.getElementById('mfCount').textContent = state.mfs.length + ' schemes';
+  if (!state.mfs.length) {
+    container.innerHTML = emptyState('No mutual funds added yet');
+    return;
+  }
+  container.innerHTML = state.mfs.map((m, idx) => mfCard(m, idx)).join('');
+}
+
+// ── STOCK CARD HTML ──────────────────────────────────────────────
+function stockCard(s, idx) {
+  const score  = calcStockScore(s.price, s.high52, s.low52, s.pe, s.target);
+  const sig    = scoreToSignal(score);
+  const col    = scoreColor(score);
+  const drop   = s.high52 ? (((s.high52 - s.price) / s.high52) * 100).toFixed(1) : '—';
+  const pos    = (s.high52 && s.low52 && s.high52 > s.low52)
+                 ? ((s.price - s.low52) / (s.high52 - s.low52) * 100) : 50;
+  const delay  = idx * 0.06;
+
+  return `
+  <div class="card ${sig.cls}" style="animation-delay:${delay}s">
+    <div class="card-top">
+      <div>
+        <div class="card-symbol">${s.symbol}</div>
+        <div class="card-name">${s.name}</div>
+        <div class="card-sector">${s.sector || ''}</div>
+      </div>
+      <div class="signal-badge ${sig.cls}">${sig.icon} ${sig.label}</div>
+    </div>
+    <div class="card-body">
+      <div class="metrics-row">
+        <div class="metric">
+          <div class="metric-label">Price</div>
+          <div class="metric-value gold">₹${s.price.toLocaleString('en-IN')}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">P/E Ratio</div>
+          <div class="metric-value">${s.pe || '—'}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">Drop from High</div>
+          <div class="metric-value ${drop > 20 ? 'up' : 'down'}">${drop}%</div>
+        </div>
+      </div>
+
+      <div class="range-row">
+        <div class="range-label">52-Week Range Position</div>
+        <div class="range-track">
+          <div class="range-fill" style="width:100%"></div>
+          <div class="range-cursor" style="left:${Math.min(95,Math.max(5,pos))}%"></div>
+        </div>
+        <div class="range-ends">
+          <span>Low ₹${s.low52 ? s.low52.toLocaleString('en-IN') : '—'}</span>
+          <span>High ₹${s.high52 ? s.high52.toLocaleString('en-IN') : '—'}</span>
+        </div>
+      </div>
+
+      <div class="score-row">
+        <div class="score-label">Buy Score</div>
+        <div class="score-track">
+          <div class="score-fill" style="width:${score}%;background:${col}"></div>
+        </div>
+        <div class="score-num" style="color:${col}">${score}</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="alloc-display">
+        ${s.allocated > 0 ? fmt(s.allocated) : '₹0'}
+        <span>recommended</span>
+      </div>
+      <div class="card-actions">
+        <button class="card-btn invest" onclick="investStock(${idx})">Invest</button>
+        <button class="card-btn" onclick="removeStock(${idx})">Remove</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── MF CARD HTML ─────────────────────────────────────────────────
+function mfCard(m, idx) {
+  const score  = calcMFScore(m.nav, m.low1y, m.high1y, m.cagr1y, m.cagr3y, m.target);
+  const sig    = scoreToSignal(score);
+  const col    = scoreColor(score);
+  const pos    = (m.high1y && m.low1y && m.high1y > m.low1y)
+                 ? ((m.nav - m.low1y) / (m.high1y - m.low1y) * 100) : 50;
+  const delay  = idx * 0.06;
+
+  return `
+  <div class="card ${sig.cls}" style="animation-delay:${delay}s">
+    <div class="card-top">
+      <div>
+        <div class="card-symbol">AMFI · ${m.code}</div>
+        <div class="card-name">${m.name}</div>
+        <div class="card-sector">${m.category || ''}</div>
+      </div>
+      <div class="signal-badge ${sig.cls}">${sig.icon} ${sig.label}</div>
+    </div>
+    <div class="card-body">
+      <div class="metrics-row">
+        <div class="metric">
+          <div class="metric-label">NAV</div>
+          <div class="metric-value gold">₹${m.nav}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">1Y CAGR</div>
+          <div class="metric-value ${m.cagr1y >= 12 ? 'up' : 'down'}">${m.cagr1y ? m.cagr1y.toFixed(1)+'%' : '—'}</div>
+        </div>
+        <div class="metric">
+          <div class="metric-label">3Y CAGR</div>
+          <div class="metric-value ${m.cagr3y >= 10 ? 'up' : 'down'}">${m.cagr3y ? m.cagr3y.toFixed(1)+'%' : '—'}</div>
+        </div>
+      </div>
+
+      <div class="range-row">
+        <div class="range-label">1-Year NAV Range Position</div>
+        <div class="range-track">
+          <div class="range-fill" style="width:100%"></div>
+          <div class="range-cursor" style="left:${Math.min(95,Math.max(5,pos))}%"></div>
+        </div>
+        <div class="range-ends">
+          <span>Low ₹${m.low1y || '—'}</span>
+          <span>High ₹${m.high1y || '—'}</span>
+        </div>
+      </div>
+
+      <div class="score-row">
+        <div class="score-label">Buy Score</div>
+        <div class="score-track">
+          <div class="score-fill" style="width:${score}%;background:${col}"></div>
+        </div>
+        <div class="score-num" style="color:${col}">${score}</div>
+      </div>
+    </div>
+    <div class="card-footer">
+      <div class="alloc-display">
+        ${m.allocated > 0 ? fmt(m.allocated) : '₹0'}
+        <span>recommended</span>
+      </div>
+      <div class="card-actions">
+        <button class="card-btn invest" onclick="investMF(${idx})">Invest</button>
+        <button class="card-btn" onclick="removeMF(${idx})">Remove</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function emptyState(msg) {
+  return `<div class="empty" style="grid-column:1/-1"><div class="empty-icon">📊</div><p>${msg}</p></div>`;
+}
+
+// ================================================================
+//  ADD / REMOVE
+// ================================================================
+function addStock() {
+  const s = {
+    symbol: document.getElementById('s_symbol').value.trim().toUpperCase(),
+    name:   document.getElementById('s_name').value.trim(),
+    sector: document.getElementById('s_sector').value.trim(),
+    price:  parseFloat(document.getElementById('s_price').value) || 0,
+    high52: parseFloat(document.getElementById('s_high').value)  || 0,
+    low52:  parseFloat(document.getElementById('s_low').value)   || 0,
+    pe:     parseFloat(document.getElementById('s_pe').value)    || 0,
+    target: parseFloat(document.getElementById('s_target').value)|| 0,
+    allocated: 0,
+  };
+  if (!s.symbol || !s.name) { toast('Symbol and name are required'); return; }
+  state.stocks.push(s);
+  saveState(); renderAll();
+  toggleAddForm('stock');
+  logEntry('Stock', s.symbol, s.name, s.price, calcStockScore(s.price,s.high52,s.low52,s.pe,s.target), 'ADDED TO WATCHLIST');
+  toast(s.name + ' added to watchlist');
+}
+
+function addMF() {
+  const m = {
+    code:     document.getElementById('m_code').value.trim(),
+    name:     document.getElementById('m_name').value.trim(),
+    category: document.getElementById('m_cat').value,
+    nav:      parseFloat(document.getElementById('m_nav').value)    || 0,
+    low1y:    parseFloat(document.getElementById('m_low').value)    || 0,
+    high1y:   parseFloat(document.getElementById('m_high').value)   || 0,
+    cagr1y:   parseFloat(document.getElementById('m_cagr1').value)  || 0,
+    cagr3y:   parseFloat(document.getElementById('m_cagr3').value)  || 0,
+    target:   parseFloat(document.getElementById('m_target').value) || 0,
+    allocated: 0,
+  };
+  if (!m.code || !m.name) { toast('Code and name are required'); return; }
+  state.mfs.push(m);
+  saveState(); renderAll();
+  toggleAddForm('mf');
+  logEntry('MF', m.code, m.name, m.nav, calcMFScore(m.nav,m.low1y,m.high1y,m.cagr1y,m.cagr3y,m.target), 'ADDED TO WATCHLIST');
+  toast(m.name + ' added to watchlist');
+}
+
+function removeStock(idx) {
+  if (!confirm('Remove ' + state.stocks[idx].name + '?')) return;
+  state.stocks.splice(idx, 1);
+  saveState(); renderAll();
+}
+
+function removeMF(idx) {
+  if (!confirm('Remove ' + state.mfs[idx].name + '?')) return;
+  state.mfs.splice(idx, 1);
+  saveState(); renderAll();
+}
+
+function investStock(idx) {
+  const s = state.stocks[idx];
+  const score = calcStockScore(s.price, s.high52, s.low52, s.pe, s.target);
+  logEntry('Stock', s.symbol, s.name, s.price, score, '🟢 INVESTED');
+  toast('Investment recorded: ' + s.name);
+  renderLog();
+}
+
+function investMF(idx) {
+  const m = state.mfs[idx];
+  const score = calcMFScore(m.nav, m.low1y, m.high1y, m.cagr1y, m.cagr3y, m.target);
+  logEntry('MF', m.code, m.name, m.nav, score, '🟢 INVESTED');
+  toast('Investment recorded: ' + m.name);
+  renderLog();
+}
+
+// ================================================================
+//  SORT
+// ================================================================
+function sortCards(type, by) {
+  const arr = type === 'stocks' ? state.stocks : state.mfs;
+  if (by === 'score') {
+    arr.sort((a,b) => {
+      const sa = type === 'stocks' ? calcStockScore(a.price,a.high52,a.low52,a.pe,a.target)
+                                   : calcMFScore(a.nav,a.low1y,a.high1y,a.cagr1y,a.cagr3y,a.target);
+      const sb = type === 'stocks' ? calcStockScore(b.price,b.high52,b.low52,b.pe,b.target)
+                                   : calcMFScore(b.nav,b.low1y,b.high1y,b.cagr1y,b.cagr3y,b.target);
+      return sb - sa;
+    });
+  } else if (by === 'name') {
+    arr.sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  } else if (by === 'price') {
+    arr.sort((a,b) => (b.price||b.nav||0) - (a.price||a.nav||0));
+  } else if (by === 'cagr') {
+    arr.sort((a,b) => (b.cagr1y||0) - (a.cagr1y||0));
+  }
+  renderAll();
+  // Update active tab
+  event.target.closest('.sort-tabs').querySelectorAll('.sort-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// ================================================================
+//  LOG
+// ================================================================
+function logEntry(type, code, name, price, score, action) {
+  const sig = scoreToSignal(score);
+  state.log.unshift({
+    time: new Date().toLocaleString('en-IN'),
+    type, code, name,
+    price: typeof price === 'number' ? price.toFixed(2) : price,
+    score,
+    signal: sig.icon + ' ' + sig.label,
+    action,
+  });
+  saveState();
+  renderLog();
+}
+
+function renderLog() {
+  const body  = document.getElementById('logBody');
+  const empty = document.getElementById('logEmpty');
+  document.getElementById('logCount').textContent = state.log.length + ' entries';
+  if (!state.log.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  body.innerHTML = state.log.map(e => `
+    <tr>
+      <td style="color:var(--dim)">${e.time}</td>
+      <td>${e.type}</td>
+      <td><strong>${e.code}</strong> — ${e.name}</td>
+      <td style="color:var(--gold)">₹${e.price}</td>
+      <td style="color:${scoreColor(e.score)}">${e.score}</td>
+      <td>${e.signal}</td>
+      <td style="color:var(--green2)">${e.action}</td>
+    </tr>`).join('');
+}
+
+function clearLog() {
+  if (!confirm('Clear all log entries?')) return;
+  state.log = [];
+  saveState(); renderLog();
+}
+
+// ================================================================
+//  UI HELPERS
+// ================================================================
+function toggleAddForm(type) {
+  const id = type === 'stock' ? 'addStockForm' : 'addMFForm';
+  document.getElementById(id).classList.toggle('open');
+}
+
+function fmt(n) {
+  if (!n) return '₹0';
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+function updateTime() {
+  document.getElementById('currentTime').textContent =
+    new Date().toLocaleDateString('en-IN', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+}
+
+// ================================================================
+//  DEMO SEED DATA
+// ================================================================
+function seedDemoData() {
+  state.stocks = [
+    { symbol:'NSE:RELIANCE', name:'Reliance Industries', sector:'Energy',
+      price:2721, high52:3217, low52:2181, pe:23.4, target:2600, allocated:0 },
+    { symbol:'NSE:INFY', name:'Infosys Ltd', sector:'Information Technology',
+      price:1387, high52:1903, low52:1358, pe:26.1, target:1350, allocated:0 },
+    { symbol:'NSE:HDFCBANK', name:'HDFC Bank', sector:'Banking',
+      price:1542, high52:1880, low52:1363, pe:18.7, target:1450, allocated:0 },
+    { symbol:'NSE:TCS', name:'Tata Consultancy Services', sector:'IT Services',
+      price:3498, high52:4592, low52:3264, pe:28.9, target:3300, allocated:0 },
+    { symbol:'NSE:ITC', name:'ITC Ltd', sector:'FMCG',
+      price:418, high52:528, low52:401, pe:24.5, target:400, allocated:0 },
+  ];
+  state.mfs = [
+    { code:'120503', name:'Mirae Asset Large Cap — Direct', category:'Large Cap',
+      nav:104.2, low1y:88.1, high1y:112.6, cagr1y:18.3, cagr3y:14.1, target:100, allocated:0 },
+    { code:'100033', name:'HDFC Top 100 — Direct', category:'Large Cap',
+      nav:864, low1y:742, high1y:921, cagr1y:15.7, cagr3y:12.4, target:840, allocated:0 },
+    { code:'119598', name:'Parag Parikh Flexi Cap — Direct', category:'Flexi Cap',
+      nav:71.4, low1y:59.8, high1y:76.2, cagr1y:21.6, cagr3y:18.9, target:68, allocated:0 },
+  ];
+}
+</script>
+</body>
+</html>
