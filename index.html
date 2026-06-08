@@ -390,7 +390,7 @@ h1 em{font-style:italic;color:var(--gold)}
       Refresh
     </button>
     <button class="nav-btn sip" onclick="openSIP()">📊 SIP</button>
-    <button class="nav-btn setup-btn" onclick="toggleSetup()">⚙ Connect Sheet</button>
+
   </div>
 
   <!-- CONNECTION BAR -->
@@ -403,23 +403,7 @@ h1 em{font-style:italic;color:var(--gold)}
   <!-- DATA AGE WARNING -->
   <div class="age-warn" id="ageWarn"></div>
 
-  <!-- SETUP PANEL -->
-  <div class="setup-panel" id="setupPanel">
-    <h3>Connect to Google Sheets</h3>
-    <ol class="setup-steps">
-      <li>Open your Google Sheet → <strong>Extensions → Apps Script</strong></li>
-      <li>Paste the <strong>StockMF_Connected.gs</strong> file → Save → Run <strong>setupAll()</strong></li>
-      <li>Click <strong>Deploy → New Deployment → Web App</strong></li>
-      <li>Execute as: <strong>Me</strong> · Who has access: <strong>Anyone</strong></li>
-      <li>Copy the <strong>Web App URL</strong> and paste below</li>
-    </ol>
-    <div class="url-row">
-      <input class="url-input" id="webAppUrl" type="url"
-        placeholder="https://script.google.com/macros/s/YOUR_ID/exec">
-      <button class="btn primary" onclick="saveUrl()">Connect</button>
-    </div>
-    <p class="setup-note">Your URL is stored only in this browser's localStorage — never sent anywhere except directly to your own Google Apps Script.</p>
-  </div>
+
 
   <!-- HEADER -->
   <header>
@@ -635,7 +619,7 @@ h1 em{font-style:italic;color:var(--gold)}
 // ================================================================
 //  CONFIG — paste your Web App URL here OR use the Connect button
 // ================================================================
-const HARDCODED_URL = ''; // optional: paste your URL here directly
+const HARDCODED_URL = 'https://script.google.com/macros/s/AKfycbx45wQimDellM7QUwuozn70FnqYqzQBkpVbV6OzJaSaO0F-l9zm-hIvx6YN1B8s9INK/exec';
 
 // ================================================================
 //  STATE
@@ -653,13 +637,7 @@ let sortState  = {stocks:'score', mfs:'score'};
   document.getElementById('totalCapital').value = capLocal.total;
   document.getElementById('stockPct').value     = capLocal.stockPct;
   document.getElementById('mfPct').value        = capLocal.mfPct;
-  if(webAppUrl){
-    document.getElementById('webAppUrl').value = webAppUrl;
-    fetchLiveData(false);
-  } else {
-    setConn('setup','Tap ⚙ Connect Sheet to link your Google Sheets data');
-    renderLog();
-  }
+  fetchLiveData(false);
   updateTime();
   setInterval(updateTime, 60000);
   calcSIP();
@@ -675,7 +653,7 @@ let sortState  = {stocks:'score', mfs:'score'};
 let _jpTimer = null;
 
 function fetchLiveData(forceRefresh){
-  if(!webAppUrl){ toggleSetup(); return; }
+  if(!webAppUrl){ setConn('error','Web App URL not configured'); return; }
   setConn('loading', forceRefresh ? 'Fetching latest prices from Google Sheets…' : 'Loading live data…');
   spinning(true);
 
@@ -954,17 +932,7 @@ function recalcCapital(){
 }
 
 // ── URL & SETUP ───────────────────────────────────────────────────
-function saveUrl(){
-  const url = document.getElementById('webAppUrl').value.trim();
-  if(!url.startsWith('https://script.google.com')){ toast('❌ Invalid URL'); return; }
-  webAppUrl=url;
-  localStorage.setItem('mo_url',url);
-  toggleSetup();
-  fetchLiveData(false);
-}
-function toggleSetup(){
-  document.getElementById('setupPanel').classList.toggle('open');
-}
+// URL is hardcoded — no manual setup needed
 
 // ── SIP ───────────────────────────────────────────────────────────
 function openSIP(){ document.getElementById('sipOverlay').style.display='block'; document.body.style.overflow='hidden'; calcSIP(); }
