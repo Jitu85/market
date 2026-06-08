@@ -668,43 +668,90 @@ let sortState  = {stocks:'score', mfs:'score'};
 // ================================================================
 //  LIVE FETCH
 // ================================================================
-async function fetchLiveData(forceRefresh){
+// ── JSONP loader — bypasses CORS completely ──────────────────────
+// Instead of fetch(), we inject a <script> tag that calls our Web
+// App with ?callback=__mo_cb. Apps Script wraps the JSON in that
+// function name and the browser executes it as a script — no CORS.
+let _jpTimer = null;
+
+function fetchLiveData(forceRefresh){
   if(!webAppUrl){ toggleSetup(); return; }
-  setConn('loading', forceRefresh ? 'Fetching latest prices…' : 'Loading live data…');
+  setConn('loading', forceRefresh ? 'Fetching latest prices from Google Sheets…' : 'Loading live data…');
   spinning(true);
 
-  const url = webAppUrl + (forceRefresh ? '?action=refresh&t=' : '?t=') + Date.now();
-  try {
-    const res  = await fetch(url);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const data = await res.json();
-    if(data.error) throw new Error(data.message||'Script error');
+  // Remove any previous JSONP script tag
+  const old = document.getElementById('__mo_jsonp');
+  if(old) old.remove();
+
+  // Unique callback name per request
+  const cbName = '__mo_cb_' + Date.now();
+
+  // Build URL
+  const action = forceRefresh ? 'refresh' : 'read';
+  const url = webAppUrl
+    + '?callback=' + cbName
+    + '&action='   + action
+    + '&t='        + Date.now();
+
+  // Timeout safety — if script doesn't load in 30s
+  if(_jpTimer) clearTimeout(_jpTimer);
+  _jpTimer = setTimeout(()=>{
+    spinning(false);
+    useCacheOrError('Request timed out — Google may be slow. Try again.');
+  }, 30000);
+
+  // Define the callback that Apps Script will call
+  window[cbName] = function(data){
+    clearTimeout(_jpTimer);
+    spinning(false);
+    // Clean up
+    const el = document.getElementById('__mo_jsonp');
+    if(el) el.remove();
+    delete window[cbName];
+
+    if(data.error){
+      useCacheOrError(data.message || 'Script returned an error');
+      return;
+    }
 
     liveData = data;
     localStorage.setItem('mo_cache', JSON.stringify(data));
     renderAll();
 
     const ts = new Date(data.timestamp);
-    setConn('connected','🟢 Live data · Google Sheets');
-    document.getElementById('lastRefreshTime').textContent = 'Updated '+ts.toLocaleTimeString('en-IN');
+    setConn('connected','🟢 Live · Google Sheets');
+    document.getElementById('lastRefreshTime').textContent = 'Updated ' + ts.toLocaleTimeString('en-IN');
     document.getElementById('liveStatus').innerHTML = '<span class="live-dot"></span>Live';
     checkAge(ts);
-    toast('✓ '+( data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds loaded');
+    toast('✓ '+(data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds loaded');
+  };
 
-  } catch(err){
-    const cached = localStorage.getItem('mo_cache');
-    if(cached){
-      liveData = JSON.parse(cached);
-      renderAll();
-      const ts = new Date(liveData.timestamp);
-      setConn('error','⚠ Offline — cached data from '+ts.toLocaleDateString('en-IN'));
-      checkAge(ts);
-      toast('Using cached data');
-    } else {
-      setConn('error','✗ '+err.message+' · Tap ⚙ Connect Sheet');
-      clearSkeletons();
-    }
-  } finally { spinning(false); }
+  // Inject script tag
+  const script = document.createElement('script');
+  script.id  = '__mo_jsonp';
+  script.src = url;
+  script.onerror = function(){
+    clearTimeout(_jpTimer);
+    spinning(false);
+    delete window[cbName];
+    useCacheOrError('Could not reach Apps Script — check your Web App URL.');
+  };
+  document.head.appendChild(script);
+}
+
+function useCacheOrError(msg){
+  const cached = localStorage.getItem('mo_cache');
+  if(cached){
+    liveData = JSON.parse(cached);
+    renderAll();
+    const ts = new Date(liveData.timestamp);
+    setConn('error','⚠ ' + msg + ' — showing cached data');
+    checkAge(ts);
+    toast('Using cached data');
+  } else {
+    setConn('error','✗ ' + msg);
+    clearSkeletons();
+  }
 }
 
 function checkAge(ts){

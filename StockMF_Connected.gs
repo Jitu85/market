@@ -29,22 +29,43 @@ const CFG = {
 // ================================================================
 function doGet(e) {
   try {
-    const action = e && e.parameter && e.parameter.action;
+    const params   = (e && e.parameter) ? e.parameter : {};
+    const action   = params.action   || "";
+    const callback = params.callback || "";   // JSONP callback name
 
-    // Force-refresh prices before returning data
+    // Force-refresh sheet data when requested
     if (action === "refresh") {
       refreshAll();
     }
 
     const payload = buildPayload_();
+    const json    = JSON.stringify(payload);
+
+    // ── JSONP mode (browser fetch from GitHub Pages) ──────────
+    // Browser passes ?callback=__jp0 — we wrap JSON in a function
+    // call so it bypasses CORS entirely via a <script> tag load.
+    if (callback) {
+      return ContentService
+        .createTextOutput(callback + "(" + json + ");")
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
+
+    // ── Plain JSON mode (direct browser tab / Postman test) ───
     return ContentService
-      .createTextOutput(JSON.stringify(payload))
+      .createTextOutput(json)
       .setMimeType(ContentService.MimeType.JSON);
 
   } catch(err) {
-    const error = { error: true, message: err.message, timestamp: new Date().toISOString() };
+    const params   = (e && e.parameter) ? e.parameter : {};
+    const callback = params.callback || "";
+    const errJson  = JSON.stringify({ error: true, message: err.message, timestamp: new Date().toISOString() });
+    if (callback) {
+      return ContentService
+        .createTextOutput(callback + "(" + errJson + ");")
+        .setMimeType(ContentService.MimeType.JAVASCRIPT);
+    }
     return ContentService
-      .createTextOutput(JSON.stringify(error))
+      .createTextOutput(errJson)
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
