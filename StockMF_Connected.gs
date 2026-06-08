@@ -19,7 +19,7 @@ const CFG = {
   SHEET_CAPITAL : "Capital Tracker",
   SHEET_LOG     : "Decision Log",
   ALERT_EMAIL   : Session.getActiveUser().getEmail(),
-  CHECK_MINUTES : 60,
+  CHECK_MINUTES : 30,
   BUY_THRESHOLD : 70,
 };
 
