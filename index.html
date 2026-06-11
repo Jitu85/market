@@ -245,8 +245,23 @@ h1 em{font-style:italic;color:var(--gold)}
 [data-theme="light"] .card-footer{background:rgba(0,0,0,0.04)}
 .alloc-val{font-size:12px;color:var(--gold);font-weight:500}
 .alloc-sub{font-size:9px;color:var(--dim);display:block}
-.invest-btn{background:rgba(0,230,118,0.08);border:1px solid rgba(0,230,118,0.22);color:var(--green2);font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;padding:0 13px;height:34px;border-radius:4px;cursor:pointer;transition:all 0.15s;white-space:nowrap}
-.invest-btn:active{background:rgba(0,230,118,0.2);transform:scale(0.95)}
+.invest-btn{font-family:var(--mono);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;padding:0 13px;height:34px;border-radius:4px;cursor:pointer;transition:all 0.15s;white-space:nowrap;border:1px solid}
+.invest-btn:active{transform:scale(0.95)}
+/* Signal-specific invest button styles */
+.invest-btn.do-invest{background:rgba(0,230,118,0.08);border-color:rgba(0,230,118,0.28);color:var(--green2)}
+.invest-btn.do-invest:active{background:rgba(0,230,118,0.2)}
+.invest-btn.do-watch{background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.28);color:var(--yellow)}
+.invest-btn.do-watch:active{background:rgba(251,191,36,0.18)}
+.invest-btn.do-avoid{background:rgba(248,113,113,0.06);border-color:rgba(248,113,113,0.2);color:var(--red);opacity:0.7}
+/* Score reason row */
+.reason-row{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.reason-pill{font-size:9px;padding:3px 8px;border-radius:12px;border:1px solid var(--border);color:var(--dim);background:rgba(128,128,128,0.07);white-space:nowrap}
+.reason-pill.good{border-color:rgba(74,222,128,0.3);color:var(--green2);background:rgba(74,222,128,0.06)}
+.reason-pill.bad{border-color:rgba(248,113,113,0.3);color:var(--red);background:rgba(248,113,113,0.06)}
+.reason-pill.neutral{border-color:rgba(251,191,36,0.3);color:var(--yellow);background:rgba(251,191,36,0.06)}
+/* Action row in footer */
+.card-action-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.card-action-hint{font-size:9px;color:var(--dim);opacity:0.7;text-align:right;max-width:130px;line-height:1.3}
 
 /* ── SECTOR SUMMARY ─────────────────────────────────────────── */
 .sector-bar{margin-bottom:20px}
@@ -812,12 +827,96 @@ function filterBySector(s){
   if(liveData){renderStocks();renderMFs();}
 }
 
+// ── SCORE REASON BUILDER ─────────────────────────────────────────
+// Generates human-readable pills explaining WHY a score is what it is
+function stockReasons(s){
+  const reasons=[];
+  const price=Number(s.price||0),h=Number(s.high52||0),l=Number(s.low52||0),pe=Number(s.pe||0);
+  if(h&&l&&h>l){
+    const pos=(price-l)/(h-l)*100;
+    if(pos<=25)      reasons.push({text:'Near 52W low ✓',cls:'good'});
+    else if(pos<=50) reasons.push({text:'Mid 52W range',cls:'neutral'});
+    else             reasons.push({text:'Near 52W high',cls:'bad'});
+  }
+  if(h&&price){
+    const drop=((h-price)/h*100);
+    if(drop>=30)      reasons.push({text:'−'+drop.toFixed(0)+'% from peak ✓',cls:'good'});
+    else if(drop>=15) reasons.push({text:'−'+drop.toFixed(0)+'% correction',cls:'neutral'});
+    else              reasons.push({text:'−'+drop.toFixed(0)+'% from peak',cls:'bad'});
+  }
+  if(pe>0){
+    if(pe<=15)       reasons.push({text:'P/E '+pe+' (low) ✓',cls:'good'});
+    else if(pe<=28)  reasons.push({text:'P/E '+pe+' (fair)',cls:'neutral'});
+    else             reasons.push({text:'P/E '+pe+' (high)',cls:'bad'});
+  }
+  return reasons;
+}
+
+function mfReasons(m){
+  const reasons=[];
+  const nav=Number(m.nav||0),l=Number(m.low1y||0),h=Number(m.high1y||0);
+  const c1=Number(m.cagr1y||0),c3=Number(m.cagr3y||0);
+  if(h&&l&&h>l){
+    const pos=(nav-l)/(h-l)*100;
+    if(pos<=25)      reasons.push({text:'Near 1Y low ✓',cls:'good'});
+    else if(pos<=55) reasons.push({text:'Mid 1Y range',cls:'neutral'});
+    else             reasons.push({text:'Near 1Y high',cls:'bad'});
+  }
+  if(c1){
+    if(c1>=18)       reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'% ✓',cls:'good'});
+    else if(c1>=10)  reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'%',cls:'neutral'});
+    else             reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'% (low)',cls:'bad'});
+  }
+  if(c3){
+    if(c3>=14)       reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'% ✓',cls:'good'});
+    else if(c3>=8)   reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'%',cls:'neutral'});
+    else             reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'% (low)',cls:'bad'});
+  }
+  return reasons;
+}
+
+function reasonPills(reasons){
+  if(!reasons.length) return '';
+  return '<div class="reason-row">'+reasons.map(r=>`<span class="reason-pill ${r.cls}">${r.text}</span>`).join('')+'</div>';
+}
+
+// ── INVEST BUTTON BUILDER ─────────────────────────────────────────
+// Shows different button/hint based on signal — AVOID has no invest prompt
+function investFooter(type,code,name,priceOrNav,sc,sg){
+  const safeCode=escQ(code||''), safeName=escQ(name||'');
+  if(sg.cls==='strong-buy') return `
+    <div><div class="alloc-val">${'alloc' in window?'':''}</div></div>
+    <div class="card-action-wrap">
+      <button class="invest-btn do-invest" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">✓ Record Investment</button>
+      <span class="card-action-hint">Score ${sc}/100 — Strong entry signal</span>
+    </div>`;
+  if(sg.cls==='buy') return `
+    <div></div>
+    <div class="card-action-wrap">
+      <button class="invest-btn do-invest" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">✓ Record Investment</button>
+      <span class="card-action-hint">Score ${sc}/100 — Good entry point</span>
+    </div>`;
+  if(sg.cls==='watch') return `
+    <div></div>
+    <div class="card-action-wrap">
+      <button class="invest-btn do-watch" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">⏳ Add to Watchlist</button>
+      <span class="card-action-hint">Score ${sc}/100 — Wait for better entry</span>
+    </div>`;
+  // AVOID — no invest button, just explanation
+  return `
+    <div></div>
+    <div class="card-action-wrap">
+      <span class="card-action-hint" style="color:var(--red);opacity:1;font-size:10px">Score ${sc}/100<br>Not recommended now</span>
+    </div>`;
+}
+
 // ── CARD HTML ────────────────────────────────────────────────────
 function stockCard(s,i){
   const sc=Number(s.score||0),sg=sigInfo(sc),col=scol(sc);
   const drop=s.high52&&s.price?((s.high52-s.price)/s.high52*100).toFixed(1):'—';
   const pos=(s.high52&&s.low52&&s.high52>s.low52)?clamp((s.price-s.low52)/(s.high52-s.low52)*100,5,95):50;
   const age=s.updated?ageLabel(s.updated):'';
+  const reasons=stockReasons(s);
   return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
   <div class="card-top"><div style="min-width:0">
     <div class="card-symbol">${s.symbol||''}</div>
@@ -831,6 +930,7 @@ function stockCard(s,i){
       <div><div class="metric-label">P/E</div><div class="metric-value">${s.pe||'—'}</div></div>
       <div><div class="metric-label">Drop</div><div class="metric-value ${parseFloat(drop)>15?'up':'down'}">${drop}%</div></div>
     </div>
+    ${reasonPills(reasons)}
     <div class="range-row"><div class="range-label">52W Range</div>
       <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
       <div class="range-ends"><span>₹${s.low52?Number(s.low52).toLocaleString('en-IN'):'—'}</span><span>₹${s.high52?Number(s.high52).toLocaleString('en-IN'):'—'}</span></div>
@@ -841,8 +941,7 @@ function stockCard(s,i){
     </div>
   </div>
   <div class="card-footer">
-    <div><div class="alloc-val">${s.alloc>0?fmt(s.alloc):'₹0'}</div><span class="alloc-sub">recommended</span></div>
-    <button class="invest-btn" onclick="recordInvest('Stock','${escQ(s.symbol||'')}','${escQ(s.name||'')}',${s.price||0},${sc})">✓ Invest</button>
+    ${investFooter('Stock',s.symbol,s.name,s.price||0,sc,sg)}
   </div></div>`;
 }
 
@@ -850,6 +949,7 @@ function mfCard(m,i){
   const sc=Number(m.score||0),sg=sigInfo(sc),col=scol(sc);
   const pos=(m.high1y&&m.low1y&&m.high1y>m.low1y)?clamp((m.nav-m.low1y)/(m.high1y-m.low1y)*100,5,95):50;
   const age=m.updated?ageLabel(m.updated):'';
+  const reasons=mfReasons(m);
   return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
   <div class="card-top"><div style="min-width:0">
     <div class="card-symbol">AMFI · ${m.code||''}</div>
@@ -863,6 +963,7 @@ function mfCard(m,i){
       <div><div class="metric-label">1Y CAGR</div><div class="metric-value ${Number(m.cagr1y||0)>=12?'up':'down'}">${m.cagr1y?Number(m.cagr1y).toFixed(1)+'%':'—'}</div></div>
       <div><div class="metric-label">3Y CAGR</div><div class="metric-value ${Number(m.cagr3y||0)>=10?'up':'down'}">${m.cagr3y?Number(m.cagr3y).toFixed(1)+'%':'—'}</div></div>
     </div>
+    ${reasonPills(reasons)}
     <div class="range-row"><div class="range-label">1Y NAV Range</div>
       <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
       <div class="range-ends"><span>₹${m.low1y||'—'}</span><span>₹${m.high1y||'—'}</span></div>
@@ -873,8 +974,7 @@ function mfCard(m,i){
     </div>
   </div>
   <div class="card-footer">
-    <div><div class="alloc-val">${m.alloc>0?fmt(m.alloc):'₹0'}</div><span class="alloc-sub">recommended</span></div>
-    <button class="invest-btn" onclick="recordInvest('MF','${escQ(m.code||'')}','${escQ(m.name||'')}',${m.nav||0},${sc})">✓ Invest</button>
+    ${investFooter('MF',m.code,m.name,m.nav||0,sc,sg)}
   </div></div>`;
 }
 
