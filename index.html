@@ -9,6 +9,13 @@
 <meta name="apple-mobile-web-app-title" content="Market Oracle">
 <title>Market Oracle — Abhijit Kumar Misra</title>
 <link rel="manifest" href="manifest.json">
+<script>
+// Issue #14 fix — apply theme before first paint to prevent flash
+(function(){
+  var t=localStorage.getItem('mo_theme');
+  if(t==='light') document.documentElement.setAttribute('data-theme','light');
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 /* ── TOKENS: DARK THEME ─────────────────────────────────────── */
@@ -626,6 +633,18 @@ h1 em{font-style:italic;color:var(--gold)}
       </table>
     </div>
 
+    <div class="sip-section-title">Goal-Based SIP — How much do I need to invest?</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-bottom:20px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+      <div class="sip-field">
+        <label>Target Corpus ₹</label>
+        <input class="sip-input" id="goal_amount" type="number" placeholder="e.g. 5000000" inputmode="numeric" oninput="calcGoalSIP(parseFloat(document.getElementById('sip_rate').value)||12, parseInt(document.getElementById('sip_years').value)||10)">
+      </div>
+      <div class="sip-field">
+        <label>Monthly SIP Needed</label>
+        <div id="goal_monthly" style="font-family:var(--serif);font-size:22px;color:var(--gold2);font-weight:300;padding-top:8px">Enter target above</div>
+      </div>
+    </div>
+
     <div class="sip-section-title">Quick Scenarios</div>
     <div class="sip-presets">
       <button class="sip-preset" onclick="sipPreset(5000,12,10,0)">₹5K · 10Y · 12%</button>
@@ -644,376 +663,239 @@ h1 em{font-style:italic;color:var(--gold)}
 <div id="toast"></div>
 
 <script>
+'use strict';
 // ================================================================
-//  WEB APP URL — hardcoded permanently
+//  CONSTANTS
 // ================================================================
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwg4ZhslRgk7ZYpVaFLFXZtl7kI8qkm_6boav6ELp810SeJZ96R7t9sKi6DJfBgD2nx/exec';
+const WEB_APP_URL  = 'https://script.google.com/macros/s/AKfycbwg4ZhslRgk7ZYpVaFLFXZtl7kI8qkm_6boav6ELp810SeJZ96R7t9sKi6DJfBgD2nx/exec';
+const SCORE_STRONG = 80;
+const SCORE_BUY    = 65;
+const SCORE_WATCH  = 45;
+const FETCH_TIMEOUT= 30000;
+const MAX_RETRIES  = 3;
+const LOG_LIMIT    = 100;
+const LS_LOG='mo_log',LS_CAP='mo_cap',LS_CACHE='mo_cache',LS_THEME='mo_theme';
 
 // ================================================================
 //  STATE
 // ================================================================
-let liveData  = null;
-let localLog  = JSON.parse(localStorage.getItem('mo_log')  || '[]');
-let capLocal  = JSON.parse(localStorage.getItem('mo_cap')  || '{"total":100000,"stockPct":60,"mfPct":40}');
-let sortState = {stocks:'score', mfs:'score'};
-let currentTab= 'stocks';
-let searchQ   = '';
-let _jpTimer  = null;
-let isDark    = localStorage.getItem('mo_theme') !== 'light';
+let liveData=null;
+let localLog=safeParseLS(LS_LOG,[]);
+let capLocal=safeParseLS(LS_CAP,{total:100000,stockPct:60,mfPct:40});
+let sortState={stocks:'score',mfs:'score'};
+let currentTab='stocks',searchQ='',_jpTimer=null,_retryCount=0,_searchTimer=null;
+let isDark=localStorage.getItem(LS_THEME)!=='light';
+
+function safeParseLS(key,fb){try{const v=localStorage.getItem(key);return v?JSON.parse(v):fb;}catch(e){return fb;}}
+function safeSaveLS(key,val){try{localStorage.setItem(key,JSON.stringify(val));return true;}catch(e){console.warn('LS quota:',key);return false;}}
 
 // ================================================================
 //  BOOT
 // ================================================================
 (function boot(){
   applyTheme(isDark);
-  document.getElementById('totalCapital').value = capLocal.total;
-  document.getElementById('stockPct').value     = capLocal.stockPct;
-  document.getElementById('mfPct').value        = capLocal.mfPct;
-  updateTime();
-  setInterval(updateTime, 60000);
-  calcSIP();
-  initPullToRefresh();
-  fetchLiveData(false);
+  document.getElementById('totalCapital').value=capLocal.total;
+  document.getElementById('stockPct').value=capLocal.stockPct;
+  document.getElementById('mfPct').value=capLocal.mfPct;
+  updateTime();setInterval(updateTime,60000);
+  calcSIP();initPullToRefresh();initSwipeGestures();fetchLiveData(false);
 })();
 
-// ================================================================
-//  THEME
-// ================================================================
+// ── THEME ────────────────────────────────────────────────────────
 function applyTheme(dark){
-  isDark = dark;
-  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
-  document.getElementById('themeBtn').textContent = dark ? '🌙' : '☀️';
-  document.getElementById('themeColorMeta').content = dark ? '#080c14' : '#f0ede6';
-  localStorage.setItem('mo_theme', dark ? 'dark' : 'light');
+  isDark=dark;
+  document.documentElement.setAttribute('data-theme',dark?'dark':'light');
+  document.getElementById('themeBtn').textContent=dark?'🌙':'☀️';
+  document.getElementById('themeColorMeta').content=dark?'#080c14':'#f0ede6';
+  safeSaveLS(LS_THEME,dark?'dark':'light');
 }
-function toggleTheme(){ applyTheme(!isDark); toast(isDark ? '🌙 Dark mode' : '☀️ Light mode'); }
+function toggleTheme(){applyTheme(!isDark);haptic();toast(isDark?'🌙 Dark mode':'☀️ Light mode');}
 
-// ================================================================
-//  PULL TO REFRESH
-// ================================================================
+// ── HAPTIC #15 ────────────────────────────────────────────────────
+function haptic(ms=10){try{navigator.vibrate?.(ms);}catch(e){}}
+
+// ── SWIPE GESTURES #16 ───────────────────────────────────────────
+function initSwipeGestures(){
+  let x0=0;
+  const tabs=['stocks','mf'];
+  document.addEventListener('touchstart',e=>{x0=e.touches[0].clientX;},{passive:true});
+  document.addEventListener('touchend',e=>{
+    const dx=e.changedTouches[0].clientX-x0;
+    if(Math.abs(dx)<80)return;
+    const i=tabs.indexOf(currentTab);
+    if(dx<0&&i<tabs.length-1){showTab(tabs[i+1]);haptic();}
+    else if(dx>0&&i>0){showTab(tabs[i-1]);haptic();}
+  },{passive:true});
+}
+
+// ── PULL TO REFRESH ───────────────────────────────────────────────
 function initPullToRefresh(){
-  let startY=0, pulling=false;
-  document.addEventListener('touchstart', e=>{ startY=e.touches[0].clientY; }, {passive:true});
-  document.addEventListener('touchmove', e=>{
-    if(window.scrollY===0 && e.touches[0].clientY - startY > 60 && !pulling){
-      pulling=true;
-      document.getElementById('ptrIndicator').classList.add('active');
+  let startY=0,pulling=false;
+  document.addEventListener('touchstart',e=>{startY=e.touches[0].clientY;},{passive:true});
+  document.addEventListener('touchmove',e=>{
+    if(window.scrollY===0&&e.touches[0].clientY-startY>60&&!pulling){
+      pulling=true;document.getElementById('ptrIndicator').classList.add('active');
     }
-  }, {passive:true});
-  document.addEventListener('touchend', ()=>{
-    if(pulling){ pulling=false; document.getElementById('ptrIndicator').classList.remove('active'); fetchLiveData(true); }
-  }, {passive:true});
+  },{passive:true});
+  document.addEventListener('touchend',()=>{
+    if(pulling){pulling=false;document.getElementById('ptrIndicator').classList.remove('active');haptic(20);fetchLiveData(true);}
+  },{passive:true});
 }
 
-// ================================================================
-//  JSONP FETCH
-// ================================================================
+// ── JSONP FETCH with retry #24 ───────────────────────────────────
 function fetchLiveData(forceRefresh){
-  setConn('loading', forceRefresh ? 'Fetching latest prices…' : 'Loading live data…');
+  if(forceRefresh)_retryCount=0;
+  setConn('loading',forceRefresh?'Fetching latest prices…':'Loading live data…');
   spinning(true);
-  const old = document.getElementById('__mo_jsonp');
-  if(old) old.remove();
-  const cbName = '__mo_cb_' + Date.now();
-  const url = WEB_APP_URL + '?callback=' + cbName + '&action=' + (forceRefresh?'refresh':'read') + '&t=' + Date.now();
-
-  if(_jpTimer) clearTimeout(_jpTimer);
-  _jpTimer = setTimeout(()=>{ spinning(false); useCacheOrError('Request timed out — tap Refresh to try again.'); }, 30000);
-
-  window[cbName] = function(data){
-    clearTimeout(_jpTimer); spinning(false);
-    const el=document.getElementById('__mo_jsonp'); if(el) el.remove();
+  const old=document.getElementById('__mo_jsonp');if(old)old.remove();
+  const cbName='__mo_cb_'+Date.now();
+  const url=WEB_APP_URL+'?callback='+cbName+'&action='+(forceRefresh?'refresh':'read')+'&t='+Date.now();
+  if(_jpTimer)clearTimeout(_jpTimer);
+  _jpTimer=setTimeout(()=>{
+    spinning(false);
+    if(_retryCount<MAX_RETRIES){
+      _retryCount++;
+      setConn('loading',`Retrying… (attempt ${_retryCount}/${MAX_RETRIES})`);
+      setTimeout(()=>fetchLiveData(forceRefresh),_retryCount*3000);
+    } else {_retryCount=0;useCacheOrError('Connection failed after '+MAX_RETRIES+' attempts');}
+  },FETCH_TIMEOUT);
+  window[cbName]=function(data){
+    clearTimeout(_jpTimer);spinning(false);_retryCount=0;
+    const el=document.getElementById('__mo_jsonp');if(el)el.remove();
     delete window[cbName];
-    if(data.error){ useCacheOrError(data.message||'Script error'); return; }
-    liveData=data;
-    localStorage.setItem('mo_cache', JSON.stringify(data));
-    renderAll();
+    if(data.error){useCacheOrError(data.message||'Script error');return;}
+    liveData=data;safeSaveLS(LS_CACHE,data);renderAll();
     const ts=new Date(data.timestamp);
     setConn('connected','🟢 Live · Google Sheets');
     document.getElementById('lastRefreshTime').textContent='Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('liveStatus').innerHTML='<span class="live-dot"></span>Live';
     checkAge(ts);
-    toast('✓ '+(data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds');
+    toast('✓ '+(data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds loaded');
     markSignalDots(data);
   };
   const script=document.createElement('script');
-  script.id='__mo_jsonp'; script.src=url;
-  script.onerror=()=>{ clearTimeout(_jpTimer); spinning(false); delete window[cbName]; useCacheOrError('Could not reach Apps Script.'); };
+  script.id='__mo_jsonp';script.src=url;
+  script.onerror=()=>{clearTimeout(_jpTimer);spinning(false);delete window[cbName];useCacheOrError('Network error.');};
   document.head.appendChild(script);
 }
-
 function useCacheOrError(msg){
-  const cached=localStorage.getItem('mo_cache');
-  if(cached){
-    liveData=JSON.parse(cached);
-    renderAll();
-    const ts=new Date(liveData.timestamp);
-    setConn('error','⚠ '+msg+' — showing cached data');
-    checkAge(ts);
-  } else {
-    setConn('error','✗ '+msg);
-    document.getElementById('stockCards').innerHTML=emptyHtml('Connect failed — pull down to retry');
-    document.getElementById('mfCards').innerHTML=emptyHtml('Connect failed — pull down to retry');
-  }
+  const raw=localStorage.getItem(LS_CACHE);
+  if(raw){try{liveData=JSON.parse(raw);renderAll();setConn('error','⚠ '+msg+' — cached data shown');checkAge(new Date(liveData.timestamp));}
+  catch(e){setConn('error','✗ Cache corrupted. Pull to refresh.');}}
+  else{setConn('error','✗ '+msg);
+    document.getElementById('stockCards').innerHTML=emptyHtml('Pull down to retry');
+    document.getElementById('mfCards').innerHTML=emptyHtml('Pull down to retry');}
 }
-
 function checkAge(ts){
-  const h=(Date.now()-ts)/3600000;
-  const el=document.getElementById('ageWarn');
-  if(h>2){ el.className='age-warn show'; el.textContent='⚠ Data is '+(h<24?Math.round(h)+'h':Math.round(h/24)+'d')+' old — pull down or tap Refresh.'; }
+  const h=(Date.now()-ts)/3600000,el=document.getElementById('ageWarn');
+  if(h>2){el.className='age-warn show';el.textContent='⚠ Data is '+(h<24?Math.round(h)+'h':Math.round(h/24)+'d')+' old — pull down or tap Refresh.';}
   else el.className='age-warn';
 }
-
 function markSignalDots(data){
-  const hasBuyStock=(data.stocks||[]).some(s=>Number(s.score||0)>=65);
-  const hasBuyMF=(data.mfs||[]).some(m=>Number(m.score||0)>=65);
-  document.getElementById('stockDot').className='bnav-dot'+(hasBuyStock?' show':'');
-  document.getElementById('mfDot').className='bnav-dot'+(hasBuyMF?' show':'');
+  document.getElementById('stockDot').className='bnav-dot'+((data.stocks||[]).some(s=>Number(s.score||0)>=SCORE_BUY)?' show':'');
+  document.getElementById('mfDot').className='bnav-dot'+((data.mfs||[]).some(m=>Number(m.score||0)>=SCORE_BUY)?' show':'');
 }
 
-// ================================================================
-//  RENDER
-// ================================================================
+// ── CAPITAL ALLOCATION #5 ─────────────────────────────────────────
+function computeAllocs(stocks,mfs){
+  const tot=capLocal.total||100000;
+  allocGroup(stocks,tot*(capLocal.stockPct||60)/100);
+  allocGroup(mfs,   tot*(capLocal.mfPct||40)/100);
+}
+function allocGroup(items,budget){
+  items.forEach(i=>i._alloc=0);
+  const el=items.filter(i=>Number(i.score||0)>=SCORE_BUY);
+  const total=el.reduce((s,i)=>s+Number(i.score||0),0);
+  if(!total)return;
+  el.forEach(i=>{i._alloc=Math.round((Number(i.score)/total)*budget);});
+}
+
+// ── RENDER ────────────────────────────────────────────────────────
 function renderAll(){
-  renderBanner();
-  renderStocks();
-  renderMFs();
-  renderLog();
+  if(!liveData)return;
+  computeAllocs(liveData.stocks||[],liveData.mfs||[]);
+  renderBanner();renderStocks();renderMFs();renderLog();
 }
-
 function renderBanner(){
-  if(!liveData) return;
-  const cap=liveData.capital||{};
-  const tot=capLocal.total||cap.total||0;
-  const dep=cap.deployed||0;
+  const tot=capLocal.total||0;
+  const dep=[...(liveData.stocks||[]),...(liveData.mfs||[])].reduce((s,i)=>s+(i._alloc||0),0);
   const pct=tot>0?Math.round(dep/tot*100):0;
-  const sigs=[...(liveData.stocks||[]),...(liveData.mfs||[])].filter(x=>Number(x.score||0)>=65).length;
-  set('capTotal',fmt(tot)); set('capDeployed',fmt(dep));
-  set('capDeployedPct',pct+'%'); set('capRemaining',fmt(Math.max(0,tot-dep)));
+  const sigs=[...(liveData.stocks||[]),...(liveData.mfs||[])].filter(x=>Number(x.score||0)>=SCORE_BUY).length;
+  set('capTotal',fmt(tot));set('capDeployed',fmt(dep));
+  set('capDeployedPct',pct+'%');set('capRemaining',fmt(Math.max(0,tot-dep)));
   set('capSignals',String(sigs));
   document.getElementById('deployedBar').style.width=pct+'%';
 }
-
 function renderStocks(){
   let arr=[...(liveData?.stocks||[])];
-  if(searchQ) arr=arr.filter(s=>(s.name||'').toLowerCase().includes(searchQ)||(s.symbol||'').toLowerCase().includes(searchQ)||(s.sector||'').toLowerCase().includes(searchQ));
-  arr=sortArr(arr,sortState.stocks,'stock');
+  if(searchQ)arr=arr.filter(s=>
+    sanitize(s.name).toLowerCase().includes(searchQ)||
+    sanitize(s.symbol).toLowerCase().includes(searchQ)||
+    sanitize(s.sector||'').toLowerCase().includes(searchQ));
+  arr=sortArr(arr,sortState.stocks); // #1 fix: 2 args only
   set('stockCount',arr.length+' instruments');
   renderSectorPills('stockSectors',[...new Set((liveData?.stocks||[]).map(s=>s.sector).filter(Boolean))]);
-  document.getElementById('stockCards').innerHTML=arr.length?arr.map(stockCard).join(''):emptyHtml(searchQ?'No results for "'+searchQ+'"':'Run Refresh All in Apps Script to load data');
+  document.getElementById('stockCards').innerHTML=arr.length?arr.map(stockCard).join(''):emptyHtml(searchQ?'No results for "'+searchQ+'"':'Run Refresh All in Apps Script');
 }
-
 function renderMFs(){
   let arr=[...(liveData?.mfs||[])];
-  if(searchQ) arr=arr.filter(m=>(m.name||'').toLowerCase().includes(searchQ)||(m.category||'').toLowerCase().includes(searchQ)||(m.code||'').includes(searchQ));
-  arr=sortArr(arr,sortState.mfs,'mf');
+  if(searchQ)arr=arr.filter(m=>
+    sanitize(m.name).toLowerCase().includes(searchQ)||
+    sanitize(m.category||'').toLowerCase().includes(searchQ)||
+    String(m.code||'').includes(searchQ));
+  arr=sortArr(arr,sortState.mfs); // #1 fix: 2 args only
   set('mfCount',arr.length+' schemes');
   renderSectorPills('mfCategories',[...new Set((liveData?.mfs||[]).map(m=>m.category).filter(Boolean))]);
-  document.getElementById('mfCards').innerHTML=arr.length?arr.map(mfCard).join(''):emptyHtml(searchQ?'No results for "'+searchQ+'"':'Run Refresh All in Apps Script to load data');
+  document.getElementById('mfCards').innerHTML=arr.length?arr.map(mfCard).join(''):emptyHtml(searchQ?'No results for "'+searchQ+'"':'Run Refresh All in Apps Script');
 }
-
 function renderSectorPills(id,sectors){
-  const el=document.getElementById(id);
-  if(!sectors.length){el.innerHTML='';return;}
+  const el=document.getElementById(id);if(!sectors.length){el.innerHTML='';return;}
   el.innerHTML='<div class="sector-title">Filter by sector</div><div class="sector-pills">'+
-    sectors.map(s=>`<span class="sector-pill ${searchQ===s.toLowerCase()?'highlight':''}" onclick="filterBySector('${s}')">${s}</span>`).join('')+
-    '</div>';
+    sectors.map(s=>`<span class="sector-pill ${searchQ===s.toLowerCase()?'highlight':''}" onclick="filterBySector(${JSON.stringify(s)})">${sanitize(s)}</span>`).join('')+'</div>';
 }
-
 function filterBySector(s){
-  const q=s.toLowerCase();
-  searchQ= searchQ===q?'':q;
+  const q=s.toLowerCase();searchQ=searchQ===q?'':q;
   document.getElementById('searchInput').value=searchQ;
   document.getElementById('searchClear').className='search-clear'+(searchQ?' show':'');
   if(liveData){renderStocks();renderMFs();}
 }
+function emptyHtml(msg){return`<div class="empty"><div class="empty-icon">📊</div><p>${sanitize(msg)}</p></div>`;}
 
-// ── SCORE REASON BUILDER ─────────────────────────────────────────
-// Generates human-readable pills explaining WHY a score is what it is
-function stockReasons(s){
-  const reasons=[];
-  const price=Number(s.price||0),h=Number(s.high52||0),l=Number(s.low52||0),pe=Number(s.pe||0);
-  if(h&&l&&h>l){
-    const pos=(price-l)/(h-l)*100;
-    if(pos<=25)      reasons.push({text:'Near 52W low ✓',cls:'good'});
-    else if(pos<=50) reasons.push({text:'Mid 52W range',cls:'neutral'});
-    else             reasons.push({text:'Near 52W high',cls:'bad'});
-  }
-  if(h&&price){
-    const drop=((h-price)/h*100);
-    if(drop>=30)      reasons.push({text:'−'+drop.toFixed(0)+'% from peak ✓',cls:'good'});
-    else if(drop>=15) reasons.push({text:'−'+drop.toFixed(0)+'% correction',cls:'neutral'});
-    else              reasons.push({text:'−'+drop.toFixed(0)+'% from peak',cls:'bad'});
-  }
-  if(pe>0){
-    if(pe<=15)       reasons.push({text:'P/E '+pe+' (low) ✓',cls:'good'});
-    else if(pe<=28)  reasons.push({text:'P/E '+pe+' (fair)',cls:'neutral'});
-    else             reasons.push({text:'P/E '+pe+' (high)',cls:'bad'});
-  }
-  return reasons;
-}
-
-function mfReasons(m){
-  const reasons=[];
-  const nav=Number(m.nav||0),l=Number(m.low1y||0),h=Number(m.high1y||0);
-  const c1=Number(m.cagr1y||0),c3=Number(m.cagr3y||0);
-  if(h&&l&&h>l){
-    const pos=(nav-l)/(h-l)*100;
-    if(pos<=25)      reasons.push({text:'Near 1Y low ✓',cls:'good'});
-    else if(pos<=55) reasons.push({text:'Mid 1Y range',cls:'neutral'});
-    else             reasons.push({text:'Near 1Y high',cls:'bad'});
-  }
-  if(c1){
-    if(c1>=18)       reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'% ✓',cls:'good'});
-    else if(c1>=10)  reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'%',cls:'neutral'});
-    else             reasons.push({text:'1Y CAGR '+c1.toFixed(1)+'% (low)',cls:'bad'});
-  }
-  if(c3){
-    if(c3>=14)       reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'% ✓',cls:'good'});
-    else if(c3>=8)   reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'%',cls:'neutral'});
-    else             reasons.push({text:'3Y CAGR '+c3.toFixed(1)+'% (low)',cls:'bad'});
-  }
-  return reasons;
-}
-
-function reasonPills(reasons){
-  if(!reasons.length) return '';
-  return '<div class="reason-row">'+reasons.map(r=>`<span class="reason-pill ${r.cls}">${r.text}</span>`).join('')+'</div>';
-}
-
-// ── INVEST BUTTON BUILDER ─────────────────────────────────────────
-// Shows different button/hint based on signal — AVOID has no invest prompt
-function investFooter(type,code,name,priceOrNav,sc,sg){
-  const safeCode=escQ(code||''), safeName=escQ(name||'');
-  if(sg.cls==='strong-buy') return `
-    <div><div class="alloc-val">${'alloc' in window?'':''}</div></div>
-    <div class="card-action-wrap">
-      <button class="invest-btn do-invest" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">✓ Record Investment</button>
-      <span class="card-action-hint">Score ${sc}/100 — Strong entry signal</span>
-    </div>`;
-  if(sg.cls==='buy') return `
-    <div></div>
-    <div class="card-action-wrap">
-      <button class="invest-btn do-invest" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">✓ Record Investment</button>
-      <span class="card-action-hint">Score ${sc}/100 — Good entry point</span>
-    </div>`;
-  if(sg.cls==='watch') return `
-    <div></div>
-    <div class="card-action-wrap">
-      <button class="invest-btn do-watch" onclick="recordInvest('${type}','${safeCode}','${safeName}',${priceOrNav},${sc})">⏳ Add to Watchlist</button>
-      <span class="card-action-hint">Score ${sc}/100 — Wait for better entry</span>
-    </div>`;
-  // AVOID — no invest button, just explanation
-  return `
-    <div></div>
-    <div class="card-action-wrap">
-      <span class="card-action-hint" style="color:var(--red);opacity:1;font-size:10px">Score ${sc}/100<br>Not recommended now</span>
-    </div>`;
-}
-
-// ── CARD HTML ────────────────────────────────────────────────────
-function stockCard(s,i){
-  const sc=Number(s.score||0),sg=sigInfo(sc),col=scol(sc);
-  const drop=s.high52&&s.price?((s.high52-s.price)/s.high52*100).toFixed(1):'—';
-  const pos=(s.high52&&s.low52&&s.high52>s.low52)?clamp((s.price-s.low52)/(s.high52-s.low52)*100,5,95):50;
-  const age=s.updated?ageLabel(s.updated):'';
-  const reasons=stockReasons(s);
-  return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
-  <div class="card-top"><div style="min-width:0">
-    <div class="card-symbol">${s.symbol||''}</div>
-    <div class="card-name">${s.name||''}</div>
-    <div class="card-sector">${s.sector||''}</div>
-    ${age?`<div class="card-age">${age}</div>`:''}
-  </div><div class="signal-badge ${sg.cls}">${sg.icon}&nbsp;${sg.label}</div></div>
-  <div class="card-body">
-    <div class="metrics-row">
-      <div><div class="metric-label">Price</div><div class="metric-value gold">₹${s.price?Number(s.price).toLocaleString('en-IN'):'—'}</div></div>
-      <div><div class="metric-label">P/E</div><div class="metric-value">${s.pe||'—'}</div></div>
-      <div><div class="metric-label">Drop</div><div class="metric-value ${parseFloat(drop)>15?'up':'down'}">${drop}%</div></div>
-    </div>
-    ${reasonPills(reasons)}
-    <div class="range-row"><div class="range-label">52W Range</div>
-      <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
-      <div class="range-ends"><span>₹${s.low52?Number(s.low52).toLocaleString('en-IN'):'—'}</span><span>₹${s.high52?Number(s.high52).toLocaleString('en-IN'):'—'}</span></div>
-    </div>
-    <div class="score-row"><div class="score-label">Buy Score</div>
-      <div class="score-track"><div class="score-fill" style="width:${sc}%;background:${col}"></div></div>
-      <div class="score-num" style="color:${col}">${sc}</div>
-    </div>
-  </div>
-  <div class="card-footer">
-    ${investFooter('Stock',s.symbol,s.name,s.price||0,sc,sg)}
-  </div></div>`;
-}
-
-function mfCard(m,i){
-  const sc=Number(m.score||0),sg=sigInfo(sc),col=scol(sc);
-  const pos=(m.high1y&&m.low1y&&m.high1y>m.low1y)?clamp((m.nav-m.low1y)/(m.high1y-m.low1y)*100,5,95):50;
-  const age=m.updated?ageLabel(m.updated):'';
-  const reasons=mfReasons(m);
-  return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
-  <div class="card-top"><div style="min-width:0">
-    <div class="card-symbol">AMFI · ${m.code||''}</div>
-    <div class="card-name">${m.name||''}</div>
-    <div class="card-sector">${m.category||''}</div>
-    ${age?`<div class="card-age">NAV ${age}</div>`:''}
-  </div><div class="signal-badge ${sg.cls}">${sg.icon}&nbsp;${sg.label}</div></div>
-  <div class="card-body">
-    <div class="metrics-row">
-      <div><div class="metric-label">NAV</div><div class="metric-value gold">₹${m.nav||'—'}</div></div>
-      <div><div class="metric-label">1Y CAGR</div><div class="metric-value ${Number(m.cagr1y||0)>=12?'up':'down'}">${m.cagr1y?Number(m.cagr1y).toFixed(1)+'%':'—'}</div></div>
-      <div><div class="metric-label">3Y CAGR</div><div class="metric-value ${Number(m.cagr3y||0)>=10?'up':'down'}">${m.cagr3y?Number(m.cagr3y).toFixed(1)+'%':'—'}</div></div>
-    </div>
-    ${reasonPills(reasons)}
-    <div class="range-row"><div class="range-label">1Y NAV Range</div>
-      <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
-      <div class="range-ends"><span>₹${m.low1y||'—'}</span><span>₹${m.high1y||'—'}</span></div>
-    </div>
-    <div class="score-row"><div class="score-label">Buy Score</div>
-      <div class="score-track"><div class="score-fill" style="width:${sc}%;background:${col}"></div></div>
-      <div class="score-num" style="color:${col}">${sc}</div>
-    </div>
-  </div>
-  <div class="card-footer">
-    ${investFooter('MF',m.code,m.name,m.nav||0,sc,sg)}
-  </div></div>`;
-}
-
-function emptyHtml(msg){return`<div class="empty"><div class="empty-icon">📊</div><p>${msg}</p></div>`;}
-
-// ── SORT ─────────────────────────────────────────────────────────
+// ── SORT #1 fix: clean 2-arg function ─────────────────────────────
 function sortSection(type,by,btn){
   sortState[type]=by;
   btn.closest('.sort-tabs').querySelectorAll('.sort-tab').forEach(t=>t.classList.remove('active'));
-  btn.classList.add('active');
+  btn.classList.add('active');haptic(6);
   if(liveData){if(type==='stocks')renderStocks();else renderMFs();}
 }
 function sortArr(arr,by){
-  if(by==='score') return arr.sort((a,b)=>Number(b.score||0)-Number(a.score||0));
-  if(by==='name')  return arr.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  if(by==='drop')  return arr.sort((a,b)=>{const d=x=>x.high52&&x.price?((x.high52-x.price)/x.high52*100):0;return d(b)-d(a);});
-  if(by==='cagr')  return arr.sort((a,b)=>Number(b.cagr1y||0)-Number(a.cagr1y||0));
-  return arr;
+  const c=[...arr];
+  if(by==='score')return c.sort((a,b)=>Number(b.score||0)-Number(a.score||0));
+  if(by==='name') return c.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  if(by==='drop') return c.sort((a,b)=>{const d=x=>x.high52&&x.price?((x.high52-x.price)/x.high52*100):0;return d(b)-d(a);});
+  if(by==='cagr') return c.sort((a,b)=>Number(b.cagr1y||0)-Number(a.cagr1y||0));
+  return c;
 }
 
-// ── SEARCH ───────────────────────────────────────────────────────
+// ── SEARCH #9 debounce ────────────────────────────────────────────
 function handleSearch(val){
-  searchQ=val.toLowerCase().trim();
-  document.getElementById('searchClear').className='search-clear'+(searchQ?' show':'');
-  if(liveData){renderStocks();renderMFs();}
+  document.getElementById('searchClear').className='search-clear'+(val?' show':'');
+  clearTimeout(_searchTimer);
+  _searchTimer=setTimeout(()=>{searchQ=val.toLowerCase().trim();if(liveData){renderStocks();renderMFs();}},150);
 }
 function clearSearch(){
-  searchQ=''; document.getElementById('searchInput').value='';
+  searchQ='';document.getElementById('searchInput').value='';
   document.getElementById('searchClear').className='search-clear';
-  if(liveData){renderStocks();renderMFs();}
+  clearTimeout(_searchTimer);if(liveData){renderStocks();renderMFs();}
 }
 
-// ── TABS ─────────────────────────────────────────────────────────
+// ── TABS ──────────────────────────────────────────────────────────
 function showTab(name){
   currentTab=name;
   document.querySelectorAll('.tab-section').forEach(s=>s.classList.remove('active'));
   document.querySelectorAll('.bnav-btn').forEach(b=>b.classList.remove('active'));
-  document.getElementById('tab-'+name).classList.add('active');
-  document.getElementById('bn-'+name).classList.add('active');
+  document.getElementById('tab-'+name)?.classList.add('active');
+  document.getElementById('bn-'+name)?.classList.add('active');
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
@@ -1027,87 +909,105 @@ function renderLog(){
   empty.style.display='none';
   body.innerHTML=all.map(e=>`<tr>
     <td style="color:var(--dim);white-space:nowrap">${fmtTime(e.time)}</td>
-    <td>${e.type||''}</td>
-    <td><strong>${e.code||e.symbol||''}</strong><br><span style="color:var(--dim);font-size:10px">${trunc(e.name||'',20)}</span></td>
-    <td style="color:var(--gold)">₹${e.price||'—'}</td>
-    <td style="color:${scol(Number(e.score||0))}">${e.score||'—'}</td>
-    <td style="white-space:nowrap">${e.signal||'—'}</td>
-    <td style="color:var(--green2)">${e.action||''}</td>
+    <td>${sanitize(e.type||'')}</td>
+    <td><strong>${sanitize(e.code||e.symbol||'')}</strong><br>
+      <span style="color:var(--dim);font-size:10px">${sanitize(trunc(e.name||'',20))}</span></td>
+    <td style="color:var(--gold)">₹${sanitize(String(e.price||'—'))}</td>
+    <td style="color:${scol(Number(e.score||0))}">${Number(e.score||0)}</td>
+    <td style="white-space:nowrap">${sanitize(e.signal||'—')}</td>
+    <td style="color:var(--green2)">${sanitize(e.action||'')}</td>
   </tr>`).join('');
 }
-
 function recordInvest(type,code,name,price,score){
+  haptic(15);
   const sg=sigInfo(score);
-  localLog.unshift({time:new Date().toISOString(),type,code,name,price:Number(price).toFixed(2),score,signal:sg.icon+' '+sg.label,action:'🟢 INVESTED',src:'local'});
-  localStorage.setItem('mo_log',JSON.stringify(localLog.slice(0,100)));
-  renderLog();
-  toast('✓ Recorded: '+name);
+  localLog.unshift({time:new Date().toISOString(),type,code,name,
+    price:Number(price).toFixed(2),score,signal:sg.icon+' '+sg.label,action:'🟢 INVESTED',src:'local'});
+  const trimmed=localLog.slice(0,LOG_LIMIT);
+  if(safeSaveLS(LS_LOG,trimmed))localLog=trimmed;
+  renderLog();toast('✓ Recorded: '+name);
 }
-function clearLocalLog(){if(!confirm('Clear local log?'))return;localLog=[];localStorage.removeItem('mo_log');renderLog();}
+function clearLocalLog(){if(!confirm('Clear local investment log?'))return;localLog=[];localStorage.removeItem(LS_LOG);renderLog();toast('Local log cleared');}
 
-// ── CAPITAL ───────────────────────────────────────────────────────
+// ── CAPITAL #22 validated ─────────────────────────────────────────
 function recalcCapital(){
-  capLocal.total=parseFloat(document.getElementById('totalCapital').value)||100000;
-  capLocal.stockPct=parseFloat(document.getElementById('stockPct').value)||60;
-  capLocal.mfPct=parseFloat(document.getElementById('mfPct').value)||40;
-  localStorage.setItem('mo_cap',JSON.stringify(capLocal));
-  if(liveData)renderBanner();
-  toast('Capital updated');
+  const rawTotal=parseFloat(document.getElementById('totalCapital').value);
+  const rawStock=parseFloat(document.getElementById('stockPct').value);
+  const rawMF   =parseFloat(document.getElementById('mfPct').value);
+  if(isNaN(rawTotal)||rawTotal<=0){toast('❌ Capital must be positive');return;}
+  if(isNaN(rawStock)||rawStock<0||rawStock>100){toast('❌ Stocks % must be 0–100');return;}
+  if(isNaN(rawMF)||rawMF<0||rawMF>100){toast('❌ MF % must be 0–100');return;}
+  if(rawStock+rawMF>100){toast('❌ Stocks%+MF% cannot exceed 100%');return;}
+  capLocal={total:rawTotal,stockPct:rawStock,mfPct:rawMF};
+  safeSaveLS(LS_CAP,capLocal);if(liveData)renderAll();haptic(10);toast('Capital updated');
 }
 
 // ── SIP CALCULATOR ────────────────────────────────────────────────
-function openSIP(){document.getElementById('sipOverlay').style.display='block';document.body.style.overflow='hidden';calcSIP();}
+function openSIP(){document.getElementById('sipOverlay').style.display='block';document.body.style.overflow='hidden';calcSIP();haptic(10);}
 function closeSIP(){document.getElementById('sipOverlay').style.display='none';document.body.style.overflow='';}
-function sipPreset(a,r,y,s){set('sip_amount',a);set('sip_rate',r);set('sip_years',y);set('sip_stepup',s);calcSIP();}
-
+function sipPreset(a,r,y,s){set('sip_amount',a);set('sip_rate',r);set('sip_years',y);set('sip_stepup',s);calcSIP();haptic(6);}
 function calcSIP(){
   const monthly=parseFloat(document.getElementById('sip_amount').value)||0;
-  const rate=parseFloat(document.getElementById('sip_rate').value)||12;
-  const years=parseInt(document.getElementById('sip_years').value)||10;
-  const stepup=parseFloat(document.getElementById('sip_stepup').value)||0;
+  const rate   =parseFloat(document.getElementById('sip_rate').value)||12;
+  const years  =parseInt(document.getElementById('sip_years').value)||10;
+  const stepup =parseFloat(document.getElementById('sip_stepup').value)||0;
   const r=rate/12/100;
   let corpus=0,invested=0,rows='',sip=monthly;
   for(let y=1;y<=years;y++){
     const yrSIP=sip*12;
     for(let m=0;m<12;m++){corpus=(corpus+sip)*(1+r);invested+=sip;}
     const gains=corpus-invested;
-    rows+=`<tr><td>Yr ${y}</td><td>₹${Math.round(yrSIP).toLocaleString('en-IN')}</td><td>₹${Math.round(invested).toLocaleString('en-IN')}</td><td style="color:var(--green2)">₹${Math.round(corpus).toLocaleString('en-IN')}</td><td style="color:var(--gold)">₹${Math.round(gains).toLocaleString('en-IN')}</td><td style="color:${gains>0?'var(--green2)':'var(--red)'}">${invested>0?((gains/invested)*100).toFixed(1):0}%</td></tr>`;
+    const roi=invested>0?((gains/invested)*100).toFixed(1):0;
+    rows+=`<tr><td>Yr ${y}</td><td>₹${Math.round(yrSIP).toLocaleString('en-IN')}</td><td>₹${Math.round(invested).toLocaleString('en-IN')}</td><td style="color:var(--green2)">₹${Math.round(corpus).toLocaleString('en-IN')}</td><td style="color:var(--gold)">₹${Math.round(gains).toLocaleString('en-IN')}</td><td style="color:${gains>0?'var(--green2)':'var(--red)'}">${roi}%</td></tr>`;
     if(stepup>0)sip*=(1+stepup/100);
   }
-  const gains=corpus-invested;
-  const roi=invested>0?((gains/invested)*100).toFixed(1):0;
+  const gains=corpus-invested,roi=invested>0?((gains/invested)*100).toFixed(1):0;
   set('sip_invested','₹'+Math.round(invested).toLocaleString('en-IN'));
   set('sip_wealth','₹'+Math.round(corpus).toLocaleString('en-IN'));
   set('sip_gains','₹'+Math.round(gains).toLocaleString('en-IN'));
   set('sip_months_label','over '+(years*12)+' months');
   set('sip_gain_pct',roi+'% ROI');
   document.getElementById('sipTableBody').innerHTML=rows;
-  // Lump sum comparison
-  const lsCorpus=monthly*12*years*Math.pow(1+rate/100,years);
+  // #2 fix — fair lump sum: same principal invested at start
+  const lsCorpus=invested*Math.pow(1+rate/100,years);
   const sipWins=corpus>lsCorpus;
   set('vs_sip','₹'+Math.round(corpus).toLocaleString('en-IN'));
   set('vs_ls','₹'+Math.round(lsCorpus).toLocaleString('en-IN'));
   document.getElementById('vs_sip_cell').className='vs-cell'+(sipWins?' vs-winner':'');
-  document.getElementById('vs_ls_cell').className='vs-cell'+(!sipWins?' vs-winner':'');
-  set('vs_verdict', sipWins
-    ? '✅ SIP wins by ₹'+Math.round(Math.abs(corpus-lsCorpus)).toLocaleString('en-IN')+' — regular monthly investing beats lump sum here due to rupee cost averaging.'
-    : '✅ Lump Sum wins by ₹'+Math.round(Math.abs(lsCorpus-corpus)).toLocaleString('en-IN')+' — investing the full amount early gives more time for compounding.');
+  document.getElementById('vs_ls_cell').className='vs-cell'+(sipWins?'':'vs-winner');
+  set('vs_verdict',sipWins
+    ?'✅ SIP wins by ₹'+Math.round(Math.abs(corpus-lsCorpus)).toLocaleString('en-IN')+' — rupee cost averaging beats lump sum over '+years+' years.'
+    :'✅ Lump Sum wins by ₹'+Math.round(Math.abs(lsCorpus-corpus)).toLocaleString('en-IN')+' — investing ₹'+Math.round(invested).toLocaleString('en-IN')+' upfront compounds longer.');
+  calcGoalSIP(rate,years);
+}
+// #30 Goal-based reverse SIP
+function calcGoalSIP(rate,years){
+  const goalEl=document.getElementById('goal_amount');if(!goalEl)return;
+  const goal=parseFloat(goalEl.value)||0;
+  if(!goal){set('goal_monthly','Enter target above');return;}
+  const r=rate/12/100,n=years*12;
+  const needed=goal*r/(Math.pow(1+r,n)-1);
+  set('goal_monthly','₹'+Math.round(needed).toLocaleString('en-IN')+' / month');
 }
 
 // ── HELPERS ───────────────────────────────────────────────────────
-function sigInfo(s){if(s>=80)return{label:'STRONG BUY',cls:'strong-buy',icon:'⚡'};if(s>=65)return{label:'BUY',cls:'buy',icon:'✅'};if(s>=45)return{label:'WATCH',cls:'watch',icon:'👁'};return{label:'AVOID',cls:'avoid',icon:'⛔'};}
-function scol(s){if(s>=80)return'var(--green)';if(s>=65)return'var(--green2)';if(s>=45)return'var(--yellow)';return'var(--red)';}
+// #21 XSS sanitizer
+function sanitize(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+function escQ(s){return String(s||'').replace(/'/g,"\\'");}
+function sigInfo(s){if(s>=SCORE_STRONG)return{label:'STRONG BUY',cls:'strong-buy',icon:'⚡'};if(s>=SCORE_BUY)return{label:'BUY',cls:'buy',icon:'✅'};if(s>=SCORE_WATCH)return{label:'WATCH',cls:'watch',icon:'👁'};return{label:'AVOID',cls:'avoid',icon:'⛔'};}
+function scol(s){if(s>=SCORE_STRONG)return'var(--green)';if(s>=SCORE_BUY)return'var(--green2)';if(s>=SCORE_WATCH)return'var(--yellow)';return'var(--red)';}
 function fmt(n){return n?'₹'+Math.round(n).toLocaleString('en-IN'):'₹0';}
 function set(id,v){const el=document.getElementById(id);if(!el)return;if(el.tagName==='INPUT'||el.tagName==='SELECT')el.value=v;else el.textContent=v;}
-function fmtTime(t){try{const d=new Date(t);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return t||'';}}
-function ageLabel(iso){try{const diff=(Date.now()-new Date(iso))/60000;if(diff<60)return Math.round(diff)+'m ago';if(diff<1440)return Math.round(diff/60)+'h ago';return new Date(iso).toLocaleDateString('en-IN');}catch(e){return '';}}
-function trunc(s,n){return s.length>n?s.slice(0,n)+'…':s;}
+function fmtTime(t){try{const d=new Date(t);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return t||'';}
+}
+function ageLabel(iso){try{const diff=(Date.now()-new Date(iso))/60000;if(diff<60)return Math.round(diff)+'m ago';if(diff<1440)return Math.round(diff/60)+'h ago';return new Date(iso).toLocaleDateString('en-IN');}catch(e){return '';}
+}
+function trunc(s,n){return String(s||'').length>n?String(s).slice(0,n)+'…':String(s||'');}
 function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
-function escQ(s){return String(s).replace(/'/g,"\\'").replace(/"/g,'&quot;');}
 function updateTime(){set('currentTime',new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'}));}
-function setConn(state,msg){const b=document.getElementById('connBar');b.className='conn-bar '+state;set('connMsg',msg);set('connTime',new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));}
-function spinning(on){document.getElementById('refreshBtn').classList.toggle('spinning',on);}
-function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
+function setConn(state,msg){const b=document.getElementById('connBar');if(!b)return;b.className='conn-bar '+state;set('connMsg',msg);set('connTime',new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));}
+function spinning(on){document.getElementById('refreshBtn')?.classList.toggle('spinning',on);}
+function toast(msg){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
 </script>
 </body>
 </html>
