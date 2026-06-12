@@ -382,6 +382,23 @@ h1 em{font-style:italic;color:var(--gold)}
 .vs-value{font-family:var(--serif);font-size:20px;font-weight:300}
 .vs-sub{font-size:10px;color:var(--dim);margin-top:3px}
 .vs-winner{border-bottom:2px solid var(--green2)}
+/* ── PORTFOLIO ───────────────────────────────────────────────── */
+.port-banner{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:16px;overflow:hidden}
+@media(min-width:600px){.port-banner{grid-template-columns:repeat(4,1fr)}}
+.port-cell{background:var(--card-bg);padding:13px 14px;transition:background 0.3s}
+.port-label{font-size:9px;letter-spacing:0.2em;text-transform:uppercase;color:var(--dim);margin-bottom:5px}
+.port-value{font-family:var(--serif);font-size:22px;font-weight:300;color:var(--gold2);line-height:1}
+.port-value.green{color:var(--green2)}.port-value.gold{color:var(--gold)}
+.port-value.profit{color:var(--green2)}.port-value.loss{color:var(--red)}
+.port-sub{font-size:9px;color:var(--dim);margin-top:2px}
+.port-add-wrap{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:20px;transition:background 0.3s}
+.port-form{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+@media(min-width:600px){.port-form{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:900px){.port-form{grid-template-columns:repeat(6,1fr)}}
+.port-field label{font-size:9px;letter-spacing:0.2em;color:var(--dim);text-transform:uppercase;display:block;margin-bottom:4px}
+.pt-profit{color:var(--green2)}.pt-loss{color:var(--red)}
+.pt-del{background:transparent;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:4px 6px;border-radius:3px;transition:color 0.15s}
+.pt-del:hover{color:var(--red)}
 </style>
 </head>
 <body>
@@ -536,6 +553,7 @@ h1 em{font-style:italic;color:var(--gold)}
         </div>
         <div class="section-actions">
           <button class="btn" style="height:36px;font-size:10px" onclick="clearLocalLog()">Clear Local</button>
+        <button class="btn" style="height:36px;font-size:10px;border-color:var(--blue);color:var(--blue)" onclick="exportLogCSV()">⬇ Export CSV</button>
         </div>
       </div>
       <div class="log-scroll">
@@ -550,6 +568,112 @@ h1 em{font-style:italic;color:var(--gold)}
       </div>
     </div>
   </div>
+
+  <!-- TAB: PORTFOLIO -->
+  <div class="tab-section" id="tab-portfolio">
+
+    <!-- PORTFOLIO SUMMARY BANNER -->
+    <div class="port-banner">
+      <div class="port-cell">
+        <div class="port-label">Total Invested</div>
+        <div class="port-value" id="pt_invested">₹0</div>
+        <div class="port-sub">Across all holdings</div>
+      </div>
+      <div class="port-cell">
+        <div class="port-label">Current Value</div>
+        <div class="port-value green" id="pt_value">₹0</div>
+        <div class="port-sub">At live prices</div>
+      </div>
+      <div class="port-cell">
+        <div class="port-label">Total P&amp;L</div>
+        <div class="port-value" id="pt_pnl">₹0</div>
+        <div class="port-sub" id="pt_pnl_pct">0.00%</div>
+      </div>
+      <div class="port-cell">
+        <div class="port-label">Holdings</div>
+        <div class="port-value gold" id="pt_count">0</div>
+        <div class="port-sub">Instruments</div>
+      </div>
+    </div>
+
+    <!-- ADD HOLDING FORM -->
+    <div class="port-add-wrap">
+      <div class="section-head" style="margin-bottom:12px">
+        <div>
+          <div class="section-title">Add Holding</div>
+          <div class="section-badge">Enter your actual investment</div>
+        </div>
+      </div>
+      <div class="port-form">
+        <div class="port-field">
+          <label>Type</label>
+          <select id="pt_type" class="cap-input" onchange="updatePortSymbolHint()">
+            <option value="Stock">Stock / ETF</option>
+            <option value="MF">Mutual Fund</option>
+          </select>
+        </div>
+        <div class="port-field">
+          <label>Symbol / AMFI Code</label>
+          <input id="pt_symbol" class="cap-input" placeholder="e.g. NSE:RELIANCE or 122639" autocomplete="off">
+        </div>
+        <div class="port-field">
+          <label>Name</label>
+          <input id="pt_name" class="cap-input" placeholder="e.g. Reliance Industries">
+        </div>
+        <div class="port-field">
+          <label>Buy Price ₹</label>
+          <input id="pt_buyprice" class="cap-input" type="number" inputmode="decimal" placeholder="2450.00">
+        </div>
+        <div class="port-field">
+          <label>Quantity / Units</label>
+          <input id="pt_qty" class="cap-input" type="number" inputmode="decimal" placeholder="10">
+        </div>
+        <div class="port-field">
+          <label>Buy Date</label>
+          <input id="pt_date" class="cap-input" type="date">
+        </div>
+      </div>
+      <button class="btn primary" style="margin-top:4px" onclick="addHolding()">+ Add to Portfolio</button>
+    </div>
+
+    <!-- HOLDINGS TABLE -->
+    <div class="section-head" style="margin-top:24px">
+      <div>
+        <div class="section-title">My Holdings</div>
+        <div class="section-badge" id="pt_holdings_count">0 holdings</div>
+      </div>
+      <div class="section-actions">
+        <button class="btn" style="height:36px;font-size:10px;border-color:var(--blue);color:var(--blue)" onclick="exportPortfolioCSV()">⬇ Export CSV</button>
+        <button class="btn" style="height:36px;font-size:10px" onclick="clearPortfolio()">Clear All</button>
+      </div>
+    </div>
+
+    <div class="log-scroll">
+      <table class="log-table" id="ptTable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Buy ₹</th>
+            <th>Qty</th>
+            <th>Invested</th>
+            <th>Current ₹</th>
+            <th>Value</th>
+            <th>P&amp;L</th>
+            <th>Return %</th>
+            <th>Signal</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="ptBody"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="ptEmpty">
+      <div class="empty-icon">💼</div>
+      <p>No holdings yet.<br>Add your first investment above.</p>
+    </div>
+
+  </div><!-- /tab-portfolio -->
 
   <!-- FOOTER -->
   <div class="footer-brand">
@@ -570,6 +694,10 @@ h1 em{font-style:italic;color:var(--gold)}
     <div class="bnav-icon">💰</div>
     <span>Funds</span>
     <div class="bnav-dot" id="mfDot"></div>
+  </button>
+  <button class="bnav-btn" id="bn-portfolio" onclick="showTab('portfolio')">
+    <div class="bnav-icon">💼</div>
+    <span>Portfolio</span>
   </button>
   <button class="bnav-btn" id="bn-sip" onclick="openSIP()">
     <div class="bnav-icon">📊</div>
@@ -624,6 +752,9 @@ h1 em{font-style:italic;color:var(--gold)}
       </div>
     </div>
     <div id="vs_verdict" style="font-size:11px;color:var(--dim);margin-bottom:20px;padding:10px 14px;border-radius:var(--radius);background:rgba(201,168,76,0.05);border:1px solid var(--border)"></div>
+
+    <div class="sip-section-title">Growth Visualisation</div>
+    <div id="sipChart" style="margin-bottom:20px;background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);padding:14px 10px 6px;min-height:140px"></div>
 
     <div class="sip-section-title">Year-by-Year Projection</div>
     <div class="sip-table-wrap">
@@ -979,6 +1110,7 @@ function calcSIP(){
     ?'✅ SIP wins by ₹'+Math.round(Math.abs(corpus-lsCorpus)).toLocaleString('en-IN')+' — rupee cost averaging beats lump sum over '+years+' years.'
     :'✅ Lump Sum wins by ₹'+Math.round(Math.abs(lsCorpus-corpus)).toLocaleString('en-IN')+' — investing ₹'+Math.round(invested).toLocaleString('en-IN')+' upfront compounds longer.');
   calcGoalSIP(rate,years);
+  setTimeout(drawSIPChart,50); // draw after DOM updates
 }
 // #30 Goal-based reverse SIP
 function calcGoalSIP(rate,years){
@@ -990,18 +1122,413 @@ function calcGoalSIP(rate,years){
   set('goal_monthly','₹'+Math.round(needed).toLocaleString('en-IN')+' / month');
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────
-// #21 XSS sanitizer
+// ================================================================
+//  SCORE REASON PILLS
+// ================================================================
+function stockReasons(s){
+  const r=[],p=Number(s.price||0),h=Number(s.high52||0),l=Number(s.low52||0),pe=Number(s.pe||0);
+  if(h&&l&&h>l){const pos=(p-l)/(h-l)*100;
+    if(pos<=25)r.push({t:'Near 52W low ✓',c:'good'});
+    else if(pos<=55)r.push({t:'Mid 52W range',c:'neutral'});
+    else r.push({t:'Near 52W high',c:'bad'});}
+  if(h&&p){const drop=((h-p)/h*100);
+    if(drop>=30)r.push({t:'−'+drop.toFixed(0)+'% from peak ✓',c:'good'});
+    else if(drop>=15)r.push({t:'−'+drop.toFixed(0)+'% correction',c:'neutral'});
+    else r.push({t:'−'+drop.toFixed(0)+'% from peak',c:'bad'});}
+  if(pe>0){
+    if(pe<=15)r.push({t:'P/E '+pe+' (low) ✓',c:'good'});
+    else if(pe<=28)r.push({t:'P/E '+pe+' (fair)',c:'neutral'});
+    else r.push({t:'P/E '+pe+' (high)',c:'bad'});}
+  return r;
+}
+function mfReasons(m){
+  const r=[],nav=Number(m.nav||0),l=Number(m.low1y||0),h=Number(m.high1y||0);
+  const c1=Number(m.cagr1y||0),c3=Number(m.cagr3y||0);
+  if(h&&l&&h>l){const pos=(nav-l)/(h-l)*100;
+    if(pos<=25)r.push({t:'Near 1Y low ✓',c:'good'});
+    else if(pos<=55)r.push({t:'Mid 1Y range',c:'neutral'});
+    else r.push({t:'Near 1Y high',c:'bad'});}
+  if(c1){if(c1>=18)r.push({t:'1Y CAGR '+c1.toFixed(1)+'% ✓',c:'good'});
+    else if(c1>=10)r.push({t:'1Y CAGR '+c1.toFixed(1)+'%',c:'neutral'});
+    else r.push({t:'1Y CAGR '+c1.toFixed(1)+'% (low)',c:'bad'});}
+  if(c3){if(c3>=14)r.push({t:'3Y CAGR '+c3.toFixed(1)+'% ✓',c:'good'});
+    else if(c3>=8)r.push({t:'3Y CAGR '+c3.toFixed(1)+'%',c:'neutral'});
+    else r.push({t:'3Y CAGR '+c3.toFixed(1)+'% (low)',c:'bad'});}
+  return r;
+}
+function reasonPills(reasons){
+  if(!reasons.length)return'';
+  return'<div class="reason-row">'+reasons.map(r=>`<span class="reason-pill ${r.c}">${sanitize(r.t)}</span>`).join('')+'</div>';
+}
+
+// ================================================================
+//  INVEST FOOTER — signal-aware, no Invest button for AVOID
+// ================================================================
+function investFooter(type,code,name,price,sc,sg){
+  const c=escQ(code||''),n=escQ(name||'');
+  const alloc=sg.cls!=='avoid'?`<div><div class="alloc-val">${price>0&&sg.cls!=='avoid'?fmt(sc):'₹0'}</div><span class="alloc-sub">suggested</span></div>`:'<div></div>';
+  if(sg.cls==='strong-buy')return alloc+`<div class="card-action-wrap"><button class="invest-btn do-invest" onclick="recordInvest('${type}','${c}','${n}',${price},${sc})">✓ Record Investment</button><span class="card-action-hint">Score ${sc}/100 — Strong entry signal</span></div>`;
+  if(sg.cls==='buy')return alloc+`<div class="card-action-wrap"><button class="invest-btn do-invest" onclick="recordInvest('${type}','${c}','${n}',${price},${sc})">✓ Record Investment</button><span class="card-action-hint">Score ${sc}/100 — Good entry point</span></div>`;
+  if(sg.cls==='watch')return alloc+`<div class="card-action-wrap"><button class="invest-btn do-watch" onclick="recordInvest('${type}','${c}','${n}',${price},${sc})">⏳ Add to Watchlist</button><span class="card-action-hint">Score ${sc}/100 — Wait for better entry</span></div>`;
+  return'<div></div><div class="card-action-wrap"><span class="card-action-hint" style="color:var(--red);opacity:1;font-size:10px">Score '+sc+'/100<br>Not recommended now</span></div>';
+}
+
+// ================================================================
+//  CARD HTML
+// ================================================================
+function stockCard(s,i){
+  const sc=Number(s.score||0),sg=sigInfo(sc),col=scol(sc);
+  const drop=s.high52&&s.price?((s.high52-s.price)/s.high52*100).toFixed(1):'—';
+  const pos=(s.high52&&s.low52&&s.high52>s.low52)?clamp((Number(s.price)-s.low52)/(s.high52-s.low52)*100,5,95):50;
+  const age=s.updated?ageLabel(s.updated):'';
+  const pills=reasonPills(stockReasons(s));
+  return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
+  <div class="card-top"><div style="min-width:0">
+    <div class="card-symbol">${sanitize(s.symbol||'')}</div>
+    <div class="card-name">${sanitize(s.name||'')}</div>
+    <div class="card-sector">${sanitize(s.sector||'')}</div>
+    ${age?`<div class="card-age">${age}</div>`:''}
+  </div><div class="signal-badge ${sg.cls}">${sg.icon}&nbsp;${sg.label}</div></div>
+  <div class="card-body">
+    <div class="metrics-row">
+      <div><div class="metric-label">Price</div><div class="metric-value gold">₹${s.price?Number(s.price).toLocaleString('en-IN'):'—'}</div></div>
+      <div><div class="metric-label">P/E</div><div class="metric-value">${s.pe||'—'}</div></div>
+      <div><div class="metric-label">Drop</div><div class="metric-value ${parseFloat(drop)>15?'up':'down'}">${drop}%</div></div>
+    </div>
+    ${pills}
+    <div class="range-row"><div class="range-label">52W Range</div>
+      <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
+      <div class="range-ends"><span>₹${s.low52?Number(s.low52).toLocaleString('en-IN'):'—'}</span><span>₹${s.high52?Number(s.high52).toLocaleString('en-IN'):'—'}</span></div>
+    </div>
+    <div class="score-row"><div class="score-label">Buy Score</div>
+      <div class="score-track"><div class="score-fill" style="width:${sc}%;background:${col}"></div></div>
+      <div class="score-num" style="color:${col}">${sc}</div>
+    </div>
+  </div>
+  <div class="card-footer">${investFooter('Stock',s.symbol,s.name,s.price||0,sc,sg)}</div>
+</div>`;
+}
+
+function mfCard(m,i){
+  const sc=Number(m.score||0),sg=sigInfo(sc),col=scol(sc);
+  const pos=(m.high1y&&m.low1y&&m.high1y>m.low1y)?clamp((Number(m.nav)-m.low1y)/(m.high1y-m.low1y)*100,5,95):50;
+  const age=m.updated?ageLabel(m.updated):'';
+  const pills=reasonPills(mfReasons(m));
+  return`<div class="card ${sg.cls}" style="animation-delay:${Math.min(i,7)*0.05}s">
+  <div class="card-top"><div style="min-width:0">
+    <div class="card-symbol">AMFI · ${sanitize(String(m.code||''))}</div>
+    <div class="card-name">${sanitize(m.name||'')}</div>
+    <div class="card-sector">${sanitize(m.category||'')}</div>
+    ${age?`<div class="card-age">NAV ${age}</div>`:''}
+  </div><div class="signal-badge ${sg.cls}">${sg.icon}&nbsp;${sg.label}</div></div>
+  <div class="card-body">
+    <div class="metrics-row">
+      <div><div class="metric-label">NAV</div><div class="metric-value gold">₹${m.nav||'—'}</div></div>
+      <div><div class="metric-label">1Y CAGR</div><div class="metric-value ${Number(m.cagr1y||0)>=12?'up':'down'}">${m.cagr1y?Number(m.cagr1y).toFixed(1)+'%':'—'}</div></div>
+      <div><div class="metric-label">3Y CAGR</div><div class="metric-value ${Number(m.cagr3y||0)>=10?'up':'down'}">${m.cagr3y?Number(m.cagr3y).toFixed(1)+'%':'—'}</div></div>
+    </div>
+    ${pills}
+    <div class="range-row"><div class="range-label">1Y NAV Range</div>
+      <div class="range-track"><div class="range-fill"></div><div class="range-cursor" style="left:${pos}%"></div></div>
+      <div class="range-ends"><span>₹${m.low1y||'—'}</span><span>₹${m.high1y||'—'}</span></div>
+    </div>
+    <div class="score-row"><div class="score-label">Buy Score</div>
+      <div class="score-track"><div class="score-fill" style="width:${sc}%;background:${col}"></div></div>
+      <div class="score-num" style="color:${col}">${sc}</div>
+    </div>
+  </div>
+  <div class="card-footer">${investFooter('MF',m.code,m.name,m.nav||0,sc,sg)}</div>
+</div>`;
+}
+
+// ================================================================
+//  ENHANCEMENT #13 — SIP Growth Chart (SVG sparkline)
+// ================================================================
+function drawSIPChart(){
+  const monthly=parseFloat(document.getElementById('sip_amount').value)||0;
+  const rate   =parseFloat(document.getElementById('sip_rate').value)||12;
+  const years  =parseInt(document.getElementById('sip_years').value)||10;
+  const stepup =parseFloat(document.getElementById('sip_stepup').value)||0;
+  const r=rate/12/100;
+  let corpus=0,invested=0,sip=monthly;
+  const pts=[],inv=[];
+  for(let y=1;y<=years;y++){
+    for(let m=0;m<12;m++){corpus=(corpus+sip)*(1+r);invested+=sip;}
+    pts.push(corpus);inv.push(invested);
+    if(stepup>0)sip*=(1+stepup/100);
+  }
+  const el=document.getElementById('sipChart');
+  if(!el)return;
+  const W=el.clientWidth||320,H=120;
+  const max=Math.max(...pts),min=0;
+  const px=(v,i)=>Math.round((i/(years-1||1))*W);
+  const py=v=>Math.round(H-((v-min)/(max-min||1))*H*0.9)-4;
+  const corpusPath=pts.map((v,i)=>(i===0?'M':'L')+px(v,i)+' '+py(v)).join(' ');
+  const investPath=inv.map((v,i)=>(i===0?'M':'L')+px(v,i)+' '+py(v)).join(' ');
+  el.innerHTML=`<svg width="100%" height="${H+20}" viewBox="0 0 ${W} ${H+20}" style="overflow:visible">
+    <defs>
+      <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--green2)" stop-opacity="0.3"/>
+        <stop offset="100%" stop-color="var(--green2)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <path d="${corpusPath} L${W} ${H} L0 ${H} Z" fill="url(#cg)"/>
+    <path d="${investPath}" fill="none" stroke="var(--gold)" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.7"/>
+    <path d="${corpusPath}" fill="none" stroke="var(--green2)" stroke-width="2"/>
+    <text x="4" y="${H+14}" font-size="9" fill="var(--green2)" font-family="var(--mono)">Corpus</text>
+    <text x="60" y="${H+14}" font-size="9" fill="var(--gold)" font-family="var(--mono)">─ ─ Invested</text>
+    <text x="${W-2}" y="${H+14}" font-size="9" fill="var(--dim)" font-family="var(--mono)" text-anchor="end">Yr ${years}</text>
+  </svg>`;
+}
+
+// ================================================================
+//  ENHANCEMENT #12 — Export Decision Log as CSV
+// ================================================================
+function exportLogCSV(){
+  if(!localLog.length&&!(liveData?.log||[]).length){toast('No log entries to export');return;}
+  const sheetLog=(liveData?.log||[]).map(e=>({...e,src:'sheet'}));
+  const all=[...localLog,...sheetLog].sort((a,b)=>new Date(b.time)-new Date(a.time));
+  const header='Time,Type,Symbol/Code,Name,Price/NAV,Score,Signal,Action\n';
+  const rows=all.map(e=>[
+    fmtTime(e.time),e.type||'',e.code||e.symbol||'',
+    (e.name||'').replace(/,/g,' '),e.price||'',e.score||'',
+    (e.signal||'').replace(/,/g,' '),(e.action||'').replace(/,/g,' ')
+  ].join(',')).join('\n');
+  const blob=new Blob([header+rows],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='MarketOracle_Log_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✓ Log exported as CSV');haptic(15);
+}
+
+// ================================================================
+//  PORTFOLIO TRACKER #18
+// ================================================================
+const LS_PORT = 'mo_portfolio';
+let portfolio  = safeParseLS(LS_PORT, []);
+
+function updatePortSymbolHint(){
+  const type = document.getElementById('pt_type').value;
+  document.getElementById('pt_symbol').placeholder =
+    type === 'MF' ? 'AMFI Code e.g. 122639' : 'e.g. NSE:RELIANCE';
+}
+
+function addHolding(){
+  const type     = document.getElementById('pt_type').value;
+  const symbol   = document.getElementById('pt_symbol').value.trim();
+  const name     = document.getElementById('pt_name').value.trim();
+  const buyPrice = parseFloat(document.getElementById('pt_buyprice').value);
+  const qty      = parseFloat(document.getElementById('pt_qty').value);
+  const date     = document.getElementById('pt_date').value;
+
+  if(!symbol)    { toast('❌ Symbol or AMFI Code required'); return; }
+  if(!name)      { toast('❌ Name required'); return; }
+  if(!buyPrice||buyPrice<=0){ toast('❌ Buy price must be positive'); return; }
+  if(!qty||qty<=0)          { toast('❌ Quantity must be positive'); return; }
+
+  const holding = {
+    id      : Date.now(),
+    type, symbol, name,
+    buyPrice, qty,
+    date    : date || new Date().toISOString().slice(0,10),
+    invested: Math.round(buyPrice * qty * 100) / 100,
+  };
+
+  portfolio.push(holding);
+  safeSaveLS(LS_PORT, portfolio);
+  renderPortfolio();
+  haptic(15);
+  toast('✓ Added: ' + name);
+
+  // Clear form
+  ['pt_symbol','pt_name','pt_buyprice','pt_qty','pt_date'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+}
+
+function removeHolding(id){
+  portfolio = portfolio.filter(h => h.id !== id);
+  safeSaveLS(LS_PORT, portfolio);
+  renderPortfolio();
+  haptic(10);
+  toast('Holding removed');
+}
+
+function clearPortfolio(){
+  if(!confirm('Clear all portfolio holdings? This cannot be undone.')) return;
+  portfolio = [];
+  localStorage.removeItem(LS_PORT);
+  renderPortfolio();
+  toast('Portfolio cleared');
+}
+
+// ── GET LIVE PRICE FOR A HOLDING ──────────────────────────────────
+function getLivePrice(holding){
+  if(!liveData) return null;
+  if(holding.type === 'Stock'){
+    const match = (liveData.stocks||[]).find(s =>
+      s.symbol && s.symbol.toUpperCase() === holding.symbol.toUpperCase());
+    return match ? Number(match.price||0) : null;
+  } else {
+    const match = (liveData.mfs||[]).find(m =>
+      String(m.code||'').trim() === String(holding.symbol||'').trim());
+    return match ? Number(match.nav||0) : null;
+  }
+}
+
+// ── GET LIVE SIGNAL FOR A HOLDING ────────────────────────────────
+function getLiveSignal(holding){
+  if(!liveData) return null;
+  if(holding.type === 'Stock'){
+    const match = (liveData.stocks||[]).find(s =>
+      s.symbol && s.symbol.toUpperCase() === holding.symbol.toUpperCase());
+    return match ? match.signal : null;
+  } else {
+    const match = (liveData.mfs||[]).find(m =>
+      String(m.code||'').trim() === String(holding.symbol||'').trim());
+    return match ? match.signal : null;
+  }
+}
+
+// ── RENDER PORTFOLIO ──────────────────────────────────────────────
+function renderPortfolio(){
+  const body   = document.getElementById('ptBody');
+  const empty  = document.getElementById('ptEmpty');
+  const count  = document.getElementById('pt_holdings_count');
+
+  count.textContent = portfolio.length + ' holdings';
+
+  if(!portfolio.length){
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    updatePortBanner(0,0);
+    return;
+  }
+  empty.style.display = 'none';
+
+  let totalInvested = 0, totalValue = 0;
+
+  body.innerHTML = portfolio.map(h => {
+    const livePrice  = getLivePrice(h);
+    const liveSignal = getLiveSignal(h);
+    const invested   = h.buyPrice * h.qty;
+    const curPrice   = livePrice || h.buyPrice; // fallback to buy price if no live data
+    const curValue   = curPrice * h.qty;
+    const pnl        = curValue - invested;
+    const pnlPct     = invested > 0 ? (pnl/invested*100) : 0;
+    const isProfit   = pnl >= 0;
+
+    totalInvested += invested;
+    totalValue    += curValue;
+
+    const priceDisplay = livePrice
+      ? `₹${Number(livePrice).toLocaleString('en-IN')}`
+      : `<span style="color:var(--dim);font-size:10px">—</span>`;
+
+    const signalDisplay = liveSignal
+      ? `<span style="font-size:10px">${sanitize(liveSignal)}</span>`
+      : `<span style="color:var(--dim);font-size:10px">—</span>`;
+
+    return `<tr>
+      <td>
+        <strong style="font-size:12px">${sanitize(h.name)}</strong><br>
+        <span style="color:var(--dim);font-size:10px">${sanitize(h.symbol)} · ${sanitize(h.date)}</span>
+      </td>
+      <td style="font-size:11px">${sanitize(h.type)}</td>
+      <td style="color:var(--gold)">₹${Number(h.buyPrice).toLocaleString('en-IN')}</td>
+      <td>${Number(h.qty).toLocaleString('en-IN')}</td>
+      <td>₹${Math.round(invested).toLocaleString('en-IN')}</td>
+      <td>${priceDisplay}</td>
+      <td style="color:var(--text)">₹${Math.round(curValue).toLocaleString('en-IN')}</td>
+      <td class="${isProfit?'pt-profit':'pt-loss'}">
+        ${isProfit?'+':''}₹${Math.round(pnl).toLocaleString('en-IN')}
+      </td>
+      <td class="${isProfit?'pt-profit':'pt-loss'}" style="font-weight:500">
+        ${isProfit?'+':''}${pnlPct.toFixed(2)}%
+      </td>
+      <td>${signalDisplay}</td>
+      <td><button class="pt-del" onclick="removeHolding(${h.id})" title="Remove">🗑</button></td>
+    </tr>`;
+  }).join('');
+
+  updatePortBanner(totalInvested, totalValue);
+}
+
+function updatePortBanner(invested, value){
+  const pnl    = value - invested;
+  const pnlPct = invested > 0 ? (pnl/invested*100) : 0;
+  const isProfit = pnl >= 0;
+
+  set('pt_invested', fmt(invested));
+  set('pt_value',    fmt(value));
+  set('pt_count',    String(portfolio.length));
+
+  const pnlEl    = document.getElementById('pt_pnl');
+  const pnlPctEl = document.getElementById('pt_pnl_pct');
+  if(pnlEl){
+    pnlEl.textContent = (isProfit?'+':'')+fmt(pnl);
+    pnlEl.className   = 'port-value '+(isProfit?'profit':'loss');
+  }
+  if(pnlPctEl){
+    pnlPctEl.textContent = (isProfit?'+':'')+pnlPct.toFixed(2)+'%';
+    pnlPctEl.style.color = isProfit?'var(--green2)':'var(--red)';
+  }
+
+  const valEl = document.getElementById('pt_value');
+  if(valEl) valEl.className = 'port-value '+(isProfit?'green':'loss');
+}
+
+// ── EXPORT PORTFOLIO CSV ──────────────────────────────────────────
+function exportPortfolioCSV(){
+  if(!portfolio.length){ toast('No holdings to export'); return; }
+  const header = 'Name,Type,Symbol,Buy Price,Qty,Invested,Current Price,Current Value,P&L,Return %,Buy Date\n';
+  const rows = portfolio.map(h => {
+    const lp = getLivePrice(h)||h.buyPrice;
+    const cv = lp*h.qty;
+    const pnl= cv-(h.buyPrice*h.qty);
+    const ret= h.buyPrice>0?(pnl/(h.buyPrice*h.qty)*100).toFixed(2):0;
+    return [h.name.replace(/,/g,' '),h.type,h.symbol,h.buyPrice,h.qty,
+      Math.round(h.buyPrice*h.qty),lp,Math.round(cv),Math.round(pnl),ret,h.date].join(',');
+  }).join('\n');
+  const blob = new Blob([header+rows],{type:'text/csv'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href=url; a.download='MarketOracle_Portfolio_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('✓ Portfolio exported'); haptic(15);
+}
+
+// Re-render portfolio whenever live data refreshes (prices update)
+const _origRenderAll = renderAll;
+function renderAll(){
+  _origRenderAll();
+  if(portfolio.length) renderPortfolio();
+}
+
+// Boot — render portfolio on load
+(function initPortfolio(){
+  renderPortfolio();
+})();
+
+// PWA Service Worker
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('sw.js').catch(()=>{});
+}
+
+// ================================================================
+//  HELPERS
+// ================================================================
 function sanitize(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function escQ(s){return String(s||'').replace(/'/g,"\\'");}
 function sigInfo(s){if(s>=SCORE_STRONG)return{label:'STRONG BUY',cls:'strong-buy',icon:'⚡'};if(s>=SCORE_BUY)return{label:'BUY',cls:'buy',icon:'✅'};if(s>=SCORE_WATCH)return{label:'WATCH',cls:'watch',icon:'👁'};return{label:'AVOID',cls:'avoid',icon:'⛔'};}
 function scol(s){if(s>=SCORE_STRONG)return'var(--green)';if(s>=SCORE_BUY)return'var(--green2)';if(s>=SCORE_WATCH)return'var(--yellow)';return'var(--red)';}
 function fmt(n){return n?'₹'+Math.round(n).toLocaleString('en-IN'):'₹0';}
 function set(id,v){const el=document.getElementById(id);if(!el)return;if(el.tagName==='INPUT'||el.tagName==='SELECT')el.value=v;else el.textContent=v;}
-function fmtTime(t){try{const d=new Date(t);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return t||'';}
-}
-function ageLabel(iso){try{const diff=(Date.now()-new Date(iso))/60000;if(diff<60)return Math.round(diff)+'m ago';if(diff<1440)return Math.round(diff/60)+'h ago';return new Date(iso).toLocaleDateString('en-IN');}catch(e){return '';}
-}
+function fmtTime(t){try{const d=new Date(t);return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});}catch(e){return t||'';}}
+function ageLabel(iso){try{const diff=(Date.now()-new Date(iso))/60000;if(diff<60)return Math.round(diff)+'m ago';if(diff<1440)return Math.round(diff/60)+'h ago';return new Date(iso).toLocaleDateString('en-IN');}catch(e){return '';}}
 function trunc(s,n){return String(s||'').length>n?String(s).slice(0,n)+'…':String(s||'');}
 function clamp(v,a,b){return Math.min(b,Math.max(a,v));}
 function updateTime(){set('currentTime',new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'}));}
