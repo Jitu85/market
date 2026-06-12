@@ -420,6 +420,8 @@ h1 em{font-style:italic;color:var(--gold)}
       </svg>
       Refresh
     </button>
+    <button class="nav-btn" id="notifBtn" onclick="toggleNotif()" style="border-color:var(--border);color:var(--dim)">🔕 Alerts Off</button>
+    <button class="nav-btn" onclick="exportPDF()" style="border-color:rgba(201,168,76,0.3);color:var(--gold)">📄 PDF</button>
     <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
   </div>
 
@@ -643,6 +645,7 @@ h1 em{font-style:italic;color:var(--gold)}
         <div class="section-badge" id="pt_holdings_count">0 holdings</div>
       </div>
       <div class="section-actions">
+        <button class="btn" style="height:36px;font-size:10px;border-color:var(--gold);color:var(--gold)" onclick="exportPDF()">📄 PDF Report</button>
         <button class="btn" style="height:36px;font-size:10px;border-color:var(--blue);color:var(--blue)" onclick="exportPortfolioCSV()">⬇ Export CSV</button>
         <button class="btn" style="height:36px;font-size:10px" onclick="clearPortfolio()">Clear All</button>
       </div>
@@ -1480,43 +1483,212 @@ function updatePortBanner(invested, value){
   if(valEl) valEl.className = 'port-value '+(isProfit?'green':'loss');
 }
 
-// ── EXPORT PORTFOLIO CSV ──────────────────────────────────────────
+// ================================================================
+//  EXPORT HELPERS — with branding
+// ================================================================
+function csvBranding(){
+  return 'Market Oracle — Personal Investment Dashboard\n' +
+    'Developed and Designed by: Abhijit Kumar Misra (Jitu)\n' +
+    'Website: https://jitu85.github.io/market\n' +
+    'Generated: ' + new Date().toLocaleString('en-IN') + '\n' +
+    'Disclaimer: For personal reference only. Not financial advice.\n\n';
+}
+function csvCell(s){ const v=String(s||'').replace(/"/g,'""'); return (v.includes(',')||v.includes('"'))?'"'+v+'"':v; }
+function today(){ return new Date().toISOString().slice(0,10); }
+function downloadCSV(data, filename){
+  const blob=new Blob(['\uFEFF'+data],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename+'.csv';
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+  toast('✓ Exported: '+filename+'.csv'); haptic(15);
+}
+
+// ── PORTFOLIO CSV with branding ───────────────────────────────────
 function exportPortfolioCSV(){
   if(!portfolio.length){ toast('No holdings to export'); return; }
-  const header = 'Name,Type,Symbol,Buy Price,Qty,Invested,Current Price,Current Value,P&L,Return %,Buy Date\n';
-  const rows = portfolio.map(h => {
-    const lp = getLivePrice(h)||h.buyPrice;
-    const cv = lp*h.qty;
-    const pnl= cv-(h.buyPrice*h.qty);
-    const ret= h.buyPrice>0?(pnl/(h.buyPrice*h.qty)*100).toFixed(2):0;
-    return [h.name.replace(/,/g,' '),h.type,h.symbol,h.buyPrice,h.qty,
+  const hdr = 'Name,Type,Symbol,Buy Price,Qty,Invested,Current Price,Current Value,P&L,Return %,Buy Date\n';
+  const rows = portfolio.map(h=>{
+    const lp=getLivePrice(h)||h.buyPrice, cv=lp*h.qty;
+    const pnl=cv-(h.buyPrice*h.qty);
+    const ret=h.buyPrice>0?(pnl/(h.buyPrice*h.qty)*100).toFixed(2):0;
+    return [csvCell(h.name),h.type,h.symbol,h.buyPrice,h.qty,
       Math.round(h.buyPrice*h.qty),lp,Math.round(cv),Math.round(pnl),ret,h.date].join(',');
   }).join('\n');
-  const blob = new Blob([header+rows],{type:'text/csv'});
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href=url; a.download='MarketOracle_Portfolio_'+new Date().toISOString().slice(0,10)+'.csv';
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  toast('✓ Portfolio exported'); haptic(15);
+  downloadCSV(csvBranding()+hdr+rows, 'MarketOracle_Portfolio_'+today());
 }
 
-// Re-render portfolio whenever live data refreshes (prices update)
-const _origRenderAll = renderAll;
-function renderAll(){
-  _origRenderAll();
-  if(portfolio.length) renderPortfolio();
+// ── DECISION LOG CSV with branding ───────────────────────────────
+function exportLogCSV(){
+  const sheetLog=(liveData?.log||[]).map(e=>({...e,src:'sheet'}));
+  const all=[...localLog,...sheetLog].sort((a,b)=>new Date(b.time)-new Date(a.time));
+  if(!all.length){ toast('No log entries to export'); return; }
+  const hdr='Time,Type,Symbol,Name,Price,Score,Signal,Action\n';
+  const rows=all.map(e=>[
+    fmtTime(e.time),e.type||'',e.code||e.symbol||'',
+    csvCell(e.name||''),e.price||'',e.score||'',
+    csvCell((e.signal||'').replace(/[⚡✅👁⛔🟢]/g,'')),
+    csvCell(e.action||'')
+  ].join(',')).join('\n');
+  downloadCSV(csvBranding()+hdr+rows, 'MarketOracle_Log_'+today());
 }
 
-// Boot — render portfolio on load
-(function initPortfolio(){
-  renderPortfolio();
-})();
+// ================================================================
+//  #19 — BROWSER PUSH NOTIFICATIONS
+// ================================================================
+const LS_NOTIF='mo_notif';
+let notifEnabled=localStorage.getItem(LS_NOTIF)==='true';
 
-// PWA Service Worker
-if('serviceWorker' in navigator){
-  navigator.serviceWorker.register('sw.js').catch(()=>{});
+async function toggleNotif(){
+  haptic(10);
+  if(!('Notification' in window)){ toast('⚠ Notifications not supported'); return; }
+  if(notifEnabled && Notification.permission==='granted'){
+    notifEnabled=false; safeSaveLS(LS_NOTIF,false);
+    toast('🔕 Notifications disabled'); updateNotifBtn(); return;
+  }
+  if(Notification.permission==='denied'){
+    toast('⚠ Blocked in browser settings — please enable manually'); return;
+  }
+  const perm=await Notification.requestPermission();
+  if(perm==='granted'){
+    notifEnabled=true; safeSaveLS(LS_NOTIF,true);
+    sendNotif('Market Oracle','✅ Notifications active — you will be alerted on buy signals.','📈');
+    toast('✅ Notifications enabled');
+  } else {
+    notifEnabled=false; toast('Notifications not granted');
+  }
+  updateNotifBtn();
 }
+
+function updateNotifBtn(){
+  const btn=document.getElementById('notifBtn');
+  if(!btn)return;
+  const on=notifEnabled && Notification.permission==='granted';
+  btn.textContent=on?'🔔 Alerts On':'🔕 Alerts Off';
+  btn.style.borderColor=on?'var(--green2)':'var(--border)';
+  btn.style.color=on?'var(--green2)':'var(--dim)';
+}
+
+function sendNotif(title,body,icon='📈'){
+  if(!notifEnabled||Notification.permission!=='granted')return;
+  try{
+    new Notification(title,{body,tag:'market-oracle',renotify:true,
+      icon:'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="80" font-size="80">'+icon+'</text></svg>'});
+  }catch(e){}
+}
+
+function checkAndNotify(data){
+  if(!notifEnabled||Notification.permission!=='granted')return;
+  const sb=[...(data.stocks||[]),...(data.mfs||[])].filter(x=>Number(x.score||0)>=SCORE_STRONG);
+  const b =[...(data.stocks||[]),...(data.mfs||[])].filter(x=>Number(x.score||0)>=SCORE_BUY&&Number(x.score||0)<SCORE_STRONG);
+  if(sb.length){
+    sendNotif('⚡ Strong Buy Signal — Market Oracle',
+      sb.map(x=>x.name||x.symbol||x.code).slice(0,3).join(', ')+(sb.length>3?' +'+(sb.length-3)+' more':''),'⚡');
+  } else if(b.length){
+    sendNotif('✅ Buy Signal — Market Oracle',
+      b.map(x=>x.name||x.symbol||x.code).slice(0,3).join(', ')+(b.length>3?' +'+(b.length-3)+' more':''),'✅');
+  }
+}
+
+// ================================================================
+//  #20 — PDF INVESTMENT REPORT
+// ================================================================
+function exportPDF(){
+  const now=new Date().toLocaleString('en-IN');
+  let portRows='',portTotInv=0,portTotVal=0;
+  portfolio.forEach(h=>{
+    const lp=getLivePrice(h)||h.buyPrice,cv=lp*h.qty;
+    const pnl=cv-(h.buyPrice*h.qty);
+    const ret=h.buyPrice>0?(pnl/(h.buyPrice*h.qty)*100).toFixed(2):0;
+    portTotInv+=h.buyPrice*h.qty; portTotVal+=cv;
+    const c=pnl>=0?'#1a7a3f':'#b91c1c';
+    portRows+=`<tr><td>${h.name}<br><small style="color:#888">${h.symbol} · ${h.date}</small></td><td>${h.type}</td><td>₹${Number(h.buyPrice).toLocaleString('en-IN')}</td><td>${h.qty}</td><td>₹${Math.round(h.buyPrice*h.qty).toLocaleString('en-IN')}</td><td>₹${lp?Number(lp).toLocaleString('en-IN'):'—'}</td><td>₹${Math.round(cv).toLocaleString('en-IN')}</td><td style="color:${c};font-weight:600">${pnl>=0?'+':''}₹${Math.round(pnl).toLocaleString('en-IN')}</td><td style="color:${c};font-weight:600">${pnl>=0?'+':''}${ret}%</td></tr>`;
+  });
+  if(!portRows) portRows='<tr><td colspan="9" style="text-align:center;color:#888;padding:20px">No holdings recorded</td></tr>';
+
+  let sRows='',mRows='';
+  (liveData?.stocks||[]).forEach(s=>{
+    const sc=Number(s.score||0),sg=sigInfo(sc);
+    const c=sc>=SCORE_BUY?'#1a7a3f':sc>=SCORE_WATCH?'#b45309':'#b91c1c';
+    sRows+=`<tr><td>${s.symbol||''}</td><td>${s.name||''}</td><td>${s.sector||''}</td><td>₹${s.price?Number(s.price).toLocaleString('en-IN'):'—'}</td><td>${s.pe||'—'}</td><td><span style="background:${c};color:#fff;padding:2px 8px;border-radius:3px;font-size:10px">${sg.icon} ${sg.label}</span></td><td style="font-weight:700;color:${c}">${sc}/100</td></tr>`;
+  });
+  (liveData?.mfs||[]).forEach(m=>{
+    const sc=Number(m.score||0),sg=sigInfo(sc);
+    const c=sc>=SCORE_BUY?'#1a7a3f':sc>=SCORE_WATCH?'#b45309':'#b91c1c';
+    mRows+=`<tr><td>${m.code||''}</td><td>${m.name||''}</td><td>${m.category||''}</td><td>₹${m.nav||'—'}</td><td>${m.cagr1y?Number(m.cagr1y).toFixed(1)+'%':'—'}</td><td><span style="background:${c};color:#fff;padding:2px 8px;border-radius:3px;font-size:10px">${sg.icon} ${sg.label}</span></td><td style="font-weight:700;color:${c}">${sc}/100</td></tr>`;
+  });
+  if(!sRows) sRows='<tr><td colspan="7" style="text-align:center;color:#888;padding:16px">No data — refresh dashboard first</td></tr>';
+  if(!mRows) mRows='<tr><td colspan="7" style="text-align:center;color:#888;padding:16px">No data — refresh dashboard first</td></tr>';
+
+  const pnl=portTotVal-portTotInv;
+  const ret=portTotInv>0?(pnl/portTotInv*100).toFixed(2):0;
+  const pc=pnl>=0?'#1a7a3f':'#b91c1c';
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Market Oracle Report ${today()}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',Arial,sans-serif;font-size:12px;color:#1a1410;background:#fff;padding:32px}
+.cover{text-align:center;padding:36px 0 28px;border-bottom:3px solid #c9a84c;margin-bottom:24px}
+.logo{font-size:34px;font-weight:300;font-family:Georgia,serif;color:#6b4e12;letter-spacing:-1px}
+.logo em{font-style:italic;color:#c9a84c}
+.brand{font-size:13px;color:#888;margin-top:6px;letter-spacing:2px}
+.brand strong{color:#6b4e12;font-weight:700}
+.meta{font-size:11px;color:#aaa;margin-top:6px}
+.disc{font-size:10px;color:#bbb;margin-top:6px;font-style:italic}
+h2{font-family:Georgia,serif;font-size:17px;font-weight:400;color:#6b4e12;margin:22px 0 10px;padding-bottom:5px;border-bottom:1px solid #e8e0d0}
+.sum{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px}
+.sc{background:#faf8f4;border:1px solid #e8e0d0;border-radius:4px;padding:10px 12px}
+.sl{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:#888;margin-bottom:4px}
+.sv{font-family:Georgia,serif;font-size:19px;font-weight:400;color:#6b4e12}
+.sv.p{color:#1a7a3f}.sv.l{color:#b91c1c}
+table{width:100%;border-collapse:collapse;margin-bottom:14px;font-size:11px}
+th{background:#080c14;color:#f0d080;padding:7px 8px;text-align:left;font-size:9px;letter-spacing:1.5px;text-transform:uppercase}
+td{padding:7px 8px;border-bottom:1px solid #f0ede6;vertical-align:middle}
+tr:nth-child(even) td{background:#faf8f4}
+.foot{text-align:center;margin-top:28px;padding-top:14px;border-top:1px solid #e8e0d0;font-size:10px;color:#aaa}
+.foot strong{color:#6b4e12}
+@media print{body{padding:16px}}
+</style></head><body>
+<div class="cover">
+  <div class="logo">Market <em>Oracle</em></div>
+  <div class="brand">Developed and Designed by <strong>Abhijit Kumar Misra (Jitu)</strong></div>
+  <div class="meta">Investment Report &nbsp;·&nbsp; Generated ${now}</div>
+  <div class="disc">For personal reference only. Not financial advice. Consult a SEBI-registered adviser before investing.</div>
+</div>
+<h2>Portfolio Summary</h2>
+<div class="sum">
+  <div class="sc"><div class="sl">Total Invested</div><div class="sv">₹${Math.round(portTotInv).toLocaleString('en-IN')}</div></div>
+  <div class="sc"><div class="sl">Current Value</div><div class="sv ${pnl>=0?'p':'l'}">₹${Math.round(portTotVal).toLocaleString('en-IN')}</div></div>
+  <div class="sc"><div class="sl">Total P&amp;L</div><div class="sv ${pnl>=0?'p':'l'}">${pnl>=0?'+':''}₹${Math.round(pnl).toLocaleString('en-IN')}</div></div>
+  <div class="sc"><div class="sl">Overall Return</div><div class="sv ${pnl>=0?'p':'l'}">${pnl>=0?'+':''}${ret}%</div></div>
+</div>
+<h2>Holdings — P&amp;L Detail</h2>
+<table><thead><tr><th>Name</th><th>Type</th><th>Buy ₹</th><th>Qty</th><th>Invested</th><th>Current ₹</th><th>Value</th><th>P&amp;L</th><th>Return</th></tr></thead><tbody>${portRows}</tbody></table>
+<h2>Equity &amp; ETF Watchlist</h2>
+<table><thead><tr><th>Symbol</th><th>Name</th><th>Sector</th><th>Price ₹</th><th>P/E</th><th>Signal</th><th>Score</th></tr></thead><tbody>${sRows}</tbody></table>
+<h2>Mutual Fund Watchlist</h2>
+<table><thead><tr><th>Code</th><th>Scheme Name</th><th>Category</th><th>NAV ₹</th><th>1Y CAGR</th><th>Signal</th><th>Score</th></tr></thead><tbody>${mRows}</tbody></table>
+<div class="foot">Market Oracle &nbsp;·&nbsp; <strong>Abhijit Kumar Misra (Jitu)</strong> &nbsp;·&nbsp;
+jitu85.github.io/market &nbsp;·&nbsp; Generated ${now}</div>
+</body></html>`;
+
+  const win=window.open('','_blank');
+  if(!win){ toast('⚠ Allow popups for PDF export'); return; }
+  win.document.write(html); win.document.close();
+  setTimeout(()=>{ win.focus(); win.print(); },600);
+  toast('📄 PDF report ready — use Print → Save as PDF'); haptic(15);
+}
+
+// ================================================================
+//  CONNECT NOTIFICATIONS + PORTFOLIO TO LIVE REFRESH
+// ================================================================
+const _origMarkDots=markSignalDots;
+function markSignalDots(data){ _origMarkDots(data); checkAndNotify(data); }
+
+const _origRenderAll=renderAll;
+function renderAll(){ _origRenderAll(); if(portfolio.length)renderPortfolio(); }
 
 // ================================================================
 //  HELPERS
@@ -1535,6 +1707,15 @@ function updateTime(){set('currentTime',new Date().toLocaleDateString('en-IN',{w
 function setConn(state,msg){const b=document.getElementById('connBar');if(!b)return;b.className='conn-bar '+state;set('connMsg',msg);set('connTime',new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));}
 function spinning(on){document.getElementById('refreshBtn')?.classList.toggle('spinning',on);}
 function toast(msg){const el=document.getElementById('toast');if(!el)return;el.textContent=msg;el.classList.add('show');setTimeout(()=>el.classList.remove('show'),3000);}
+
+// ================================================================
+//  BOOT
+// ================================================================
+(function init(){
+  renderPortfolio();
+  updateNotifBtn();
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+})();
 </script>
 </body>
 </html>
