@@ -877,39 +877,80 @@ function initPullToRefresh(){
 }
 
 // ── JSONP FETCH with retry #24 ───────────────────────────────────
-function fetchLiveData(forceRefresh){
-  if(forceRefresh)_retryCount=0;
-  setConn('loading',forceRefresh?'Fetching latest prices…':'Loading live data…');
-  spinning(true);
-  const old=document.getElementById('__mo_jsonp');if(old)old.remove();
-  const cbName='__mo_cb_'+Date.now();
-  const url=WEB_APP_URL+'?callback='+cbName+'&action='+(forceRefresh?'refresh':'read')+'&t='+Date.now();
-  if(_jpTimer)clearTimeout(_jpTimer);
-  _jpTimer=setTimeout(()=>{
+function fetchLiveData(forceRefresh, _attempt){
+  // _attempt tracks recursion depth — prevents infinite retry loop
+  const attempt = _attempt || 1;
+  if(attempt > MAX_RETRIES){
     spinning(false);
-    if(_retryCount<MAX_RETRIES){
-      _retryCount++;
-      setConn('loading',`Retrying… (attempt ${_retryCount}/${MAX_RETRIES})`);
-      setTimeout(()=>fetchLiveData(forceRefresh),_retryCount*3000);
-    } else {_retryCount=0;useCacheOrError('Connection failed after '+MAX_RETRIES+' attempts');}
-  },FETCH_TIMEOUT);
-  window[cbName]=function(data){
-    clearTimeout(_jpTimer);spinning(false);_retryCount=0;
-    const el=document.getElementById('__mo_jsonp');if(el)el.remove();
+    useCacheOrError('Could not reach Google Sheets after '+MAX_RETRIES+' attempts. Check Apps Script deployment.');
+    return;
+  }
+
+  if(attempt===1){
+    setConn('loading', forceRefresh?'Fetching latest prices…':'Connecting to Google Sheets…');
+    spinning(true);
+  } else {
+    setConn('loading','Retrying… (attempt '+attempt+'/'+MAX_RETRIES+')');
+  }
+
+  // Remove any previous JSONP script
+  const old=document.getElementById('__mo_jsonp');
+  if(old) old.remove();
+
+  const cbName='__mo_cb_'+Date.now();
+  const url=WEB_APP_URL
+    +'?callback='+cbName
+    +'&action='+(forceRefresh?'refresh':'read')
+    +'&t='+Date.now();
+
+  // Clear previous timer
+  if(_jpTimer) clearTimeout(_jpTimer);
+
+  // Timeout — 15s per attempt (faster failure feedback)
+  _jpTimer=setTimeout(()=>{
+    const el=document.getElementById('__mo_jsonp');
+    if(el) el.remove();
     delete window[cbName];
-    if(data.error){useCacheOrError(data.message||'Script error');return;}
-    liveData=data;safeSaveLS(LS_CACHE,data);renderAll();
+    const delay=(attempt*2000); // 2s, 4s, 6s backoff
+    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), delay);
+  }, 15000);
+
+  // JSONP callback
+  window[cbName]=function(data){
+    clearTimeout(_jpTimer);
+    spinning(false);
+    const el=document.getElementById('__mo_jsonp');
+    if(el) el.remove();
+    delete window[cbName];
+
+    if(data.error){
+      useCacheOrError(data.message||'Apps Script returned an error');
+      return;
+    }
+
+    liveData=data;
+    safeSaveLS(LS_CACHE, data);
+    renderAll();
     const ts=new Date(data.timestamp);
     setConn('connected','🟢 Live · Google Sheets');
-    document.getElementById('lastRefreshTime').textContent='Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('liveStatus').innerHTML='<span class="live-dot"></span>Live';
+    document.getElementById('lastRefreshTime').textContent=
+      'Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('liveStatus').innerHTML=
+      '<span class="live-dot"></span>Live';
     checkAge(ts);
     toast('✓ '+(data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds loaded');
     markSignalDots(data);
   };
+
+  // Inject script tag
   const script=document.createElement('script');
-  script.id='__mo_jsonp';script.src=url;
-  script.onerror=()=>{clearTimeout(_jpTimer);spinning(false);delete window[cbName];useCacheOrError('Network error.');};
+  script.id='__mo_jsonp';
+  script.src=url;
+  script.onerror=()=>{
+    clearTimeout(_jpTimer);
+    delete window[cbName];
+    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), attempt*2000);
+  };
   document.head.appendChild(script);
 }
 function useCacheOrError(msg){
