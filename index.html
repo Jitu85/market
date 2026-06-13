@@ -420,6 +420,7 @@ h1 em{font-style:italic;color:var(--gold)}
       </svg>
       Refresh
     </button>
+    <button class="nav-btn" onclick="clearCache()" style="font-size:9px;color:var(--dim);border-color:rgba(248,113,113,0.25)">🗑 Clear Cache</button>
     <button class="nav-btn" id="notifBtn" onclick="toggleNotif()" style="border-color:var(--border);color:var(--dim)">🔕 Alerts Off</button>
     <button class="nav-btn" onclick="exportPDF()" style="border-color:rgba(201,168,76,0.3);color:var(--gold)">📄 PDF</button>
     <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
@@ -827,6 +828,20 @@ function safeSaveLS(key,val){try{localStorage.setItem(key,JSON.stringify(val));r
 //  BOOT
 // ================================================================
 (function boot(){
+  // Validate and clear corrupted cache before anything else
+  const raw=localStorage.getItem(LS_CACHE);
+  if(raw){
+    try{
+      const p=JSON.parse(raw);
+      if(!p||!p.timestamp||(!Array.isArray(p.stocks)&&!Array.isArray(p.mfs))){
+        localStorage.removeItem(LS_CACHE);
+        console.warn('Market Oracle: corrupted cache cleared on boot');
+      }
+    } catch(e){
+      localStorage.removeItem(LS_CACHE);
+      console.warn('Market Oracle: unparseable cache cleared on boot');
+    }
+  }
   applyTheme(isDark);
   document.getElementById('totalCapital').value=capLocal.total;
   document.getElementById('stockPct').value=capLocal.stockPct;
@@ -955,13 +970,39 @@ function fetchLiveData(forceRefresh, _attempt){
 }
 function useCacheOrError(msg){
   const raw=localStorage.getItem(LS_CACHE);
-  if(raw){try{liveData=JSON.parse(raw);renderAll();setConn('error','⚠ '+msg+' — cached data shown');checkAge(new Date(liveData.timestamp));}
-  catch(e){setConn('error','✗ Cache corrupted. Pull to refresh.');}}
-  else{setConn('error','✗ '+msg);
-    document.getElementById('stockCards').innerHTML=emptyHtml('Pull down to retry');
-    document.getElementById('mfCards').innerHTML=emptyHtml('Pull down to retry');}
+  if(raw){
+    try{
+      const parsed=JSON.parse(raw);
+      // Validate cache has expected structure
+      if(!parsed||typeof parsed!=='object'||!parsed.timestamp){
+        throw new Error('Invalid cache structure');
+      }
+      liveData=parsed;
+      renderAll();
+      setConn('error','⚠ '+msg+' — showing cached data');
+      checkAge(new Date(parsed.timestamp));
+    } catch(e){
+      // Cache is corrupted — wipe it and show clean error
+      localStorage.removeItem(LS_CACHE);
+      setConn('error','✗ Cache was corrupted and has been cleared. Tap Refresh to reload live data.');
+      document.getElementById('stockCards').innerHTML=emptyHtml('Cache cleared — tap ⟳ Refresh to load live data');
+      document.getElementById('mfCards').innerHTML=emptyHtml('Cache cleared — tap ⟳ Refresh to load live data');
+      toast('🗑 Corrupted cache cleared — tap Refresh');
+    }
+  } else {
+    setConn('error','✗ '+msg+' — tap Refresh to retry');
+    document.getElementById('stockCards').innerHTML=emptyHtml('Tap ⟳ Refresh to load live data');
+    document.getElementById('mfCards').innerHTML=emptyHtml('Tap ⟳ Refresh to load live data');
+  }
 }
-function checkAge(ts){
+function clearCache(){
+  localStorage.removeItem(LS_CACHE);
+  liveData=null;
+  haptic(15);
+  toast('🗑 Cache cleared — fetching fresh data…');
+  setTimeout(()=>fetchLiveData(false),400);
+}
+
   const h=(Date.now()-ts)/3600000,el=document.getElementById('ageWarn');
   if(h>2){el.className='age-warn show';el.textContent='⚠ Data is '+(h<24?Math.round(h)+'h':Math.round(h/24)+'d')+' old — pull down or tap Refresh.';}
   else el.className='age-warn';
