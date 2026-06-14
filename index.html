@@ -892,15 +892,19 @@ function initPullToRefresh(){
 }
 
 // ── JSONP FETCH with retry #24 ───────────────────────────────────
+// ── Fixed callback name — survives Google redirect ────────────────
+// Dynamic names like __mo_cb_1234567 get lost when Google silently
+// redirects script.google.com → script.googleusercontent.com.
+// A fixed named function on window is always available.
+const JSONP_CB = 'marketOracleCallback';
+
 function fetchLiveData(forceRefresh, _attempt){
-  // _attempt tracks recursion depth — prevents infinite retry loop
   const attempt = _attempt || 1;
   if(attempt > MAX_RETRIES){
     spinning(false);
-    useCacheOrError('Could not reach Google Sheets after '+MAX_RETRIES+' attempts. Check Apps Script deployment.');
+    useCacheOrError('Could not reach Google Sheets after '+MAX_RETRIES+' attempts.');
     return;
   }
-
   if(attempt===1){
     setConn('loading', forceRefresh?'Fetching latest prices…':'Connecting to Google Sheets…');
     spinning(true);
@@ -908,62 +912,66 @@ function fetchLiveData(forceRefresh, _attempt){
     setConn('loading','Retrying… (attempt '+attempt+'/'+MAX_RETRIES+')');
   }
 
-  // Remove any previous JSONP script
-  const old=document.getElementById('__mo_jsonp');
+  // Remove any previous JSONP script tag
+  const old = document.getElementById('__mo_jsonp');
   if(old) old.remove();
-
-  const cbName='__mo_cb_'+Date.now();
-  const url=WEB_APP_URL
-    +'?callback='+cbName
-    +'&action='+(forceRefresh?'refresh':'read')
-    +'&t='+Date.now();
 
   // Clear previous timer
   if(_jpTimer) clearTimeout(_jpTimer);
 
-  // Timeout — 15s per attempt (faster failure feedback)
-  _jpTimer=setTimeout(()=>{
-    const el=document.getElementById('__mo_jsonp');
-    if(el) el.remove();
-    delete window[cbName];
-    const delay=(attempt*2000); // 2s, 4s, 6s backoff
-    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), delay);
-  }, 15000);
+  // Build URL with fixed callback name
+  const url = WEB_APP_URL
+    + '?callback=' + JSONP_CB
+    + '&action='   + (forceRefresh?'refresh':'read')
+    + '&t='        + Date.now();
 
-  // JSONP callback
-  window[cbName]=function(data){
+  // Timeout — 20s per attempt, then retry with backoff
+  _jpTimer = setTimeout(()=>{
+    const el = document.getElementById('__mo_jsonp');
+    if(el) el.remove();
+    window[JSONP_CB] = null;
+    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), attempt*2000);
+  }, 20000);
+
+  // Define callback BEFORE injecting script tag — fixed name survives redirect
+  window[JSONP_CB] = function(data){
     clearTimeout(_jpTimer);
     spinning(false);
-    const el=document.getElementById('__mo_jsonp');
+    const el = document.getElementById('__mo_jsonp');
     if(el) el.remove();
-    delete window[cbName];
-
-    if(data.error){
-      useCacheOrError(data.message||'Apps Script returned an error');
-      return;
+    window[JSONP_CB] = null;
+    try{
+      if(!data || data.error){
+        useCacheOrError((data&&data.message)||'Apps Script returned an error');
+        return;
+      }
+      liveData = data;
+      safeSaveLS(LS_CACHE, data);
+      renderAll();
+      const ts = new Date(data.timestamp);
+      setConn('connected','🟢 Live · Google Sheets');
+      document.getElementById('lastRefreshTime').textContent =
+        'Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('liveStatus').innerHTML =
+        '<span class="live-dot"></span>Live';
+      checkAge(ts);
+      toast('✓ '+(liveData.stocks||[]).length+' stocks · '+(liveData.mfs||[]).length+' funds loaded');
+      markSignalDots(liveData);
+    } catch(err){
+      console.error('Market Oracle render error:',err);
+      setConn('error','✗ Render error: '+err.message+' — tap Refresh');
+      toast('❌ '+err.message);
     }
-
-    liveData=data;
-    safeSaveLS(LS_CACHE, data);
-    renderAll();
-    const ts=new Date(data.timestamp);
-    setConn('connected','🟢 Live · Google Sheets');
-    document.getElementById('lastRefreshTime').textContent=
-      'Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('liveStatus').innerHTML=
-      '<span class="live-dot"></span>Live';
-    checkAge(ts);
-    toast('✓ '+(data.stocks?.length||0)+' stocks · '+(data.mfs?.length||0)+' funds loaded');
-    markSignalDots(data);
   };
 
-  // Inject script tag
-  const script=document.createElement('script');
-  script.id='__mo_jsonp';
-  script.src=url;
-  script.onerror=()=>{
+  // Inject script tag — browser executes JSONP response
+  const script    = document.createElement('script');
+  script.id       = '__mo_jsonp';
+  script.async    = true;
+  script.src      = url;
+  script.onerror  = ()=>{
     clearTimeout(_jpTimer);
-    delete window[cbName];
+    window[JSONP_CB] = null;
     setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), attempt*2000);
   };
   document.head.appendChild(script);
@@ -1003,6 +1011,7 @@ function clearCache(){
   setTimeout(()=>fetchLiveData(false),400);
 }
 
+function checkAge(ts){
   const h=(Date.now()-ts)/3600000,el=document.getElementById('ageWarn');
   if(h>2){el.className='age-warn show';el.textContent='⚠ Data is '+(h<24?Math.round(h)+'h':Math.round(h/24)+'d')+' old — pull down or tap Refresh.';}
   else el.className='age-warn';
@@ -1029,17 +1038,39 @@ function allocGroup(items,budget){
 // ── RENDER ────────────────────────────────────────────────────────
 function renderAll(){
   if(!liveData)return;
-  computeAllocs(liveData.stocks||[],liveData.mfs||[]);
-  renderBanner();renderStocks();renderMFs();renderLog();
+  // Defensive: handle case where stocks/mfs might be nested in capital
+  if(!Array.isArray(liveData.stocks) && Array.isArray(liveData.capital?.stocks)){
+    liveData.stocks = liveData.capital.stocks;
+  }
+  if(!Array.isArray(liveData.mfs) && Array.isArray(liveData.capital?.mfs)){
+    liveData.mfs = liveData.capital.mfs;
+  }
+  // Ensure stocks and mfs are always arrays
+  if(!Array.isArray(liveData.stocks)) liveData.stocks=[];
+  if(!Array.isArray(liveData.mfs))    liveData.mfs=[];
+  if(!Array.isArray(liveData.log))    liveData.log=[];
+
+  computeAllocs(liveData.stocks, liveData.mfs);
+  renderBanner();
+  renderStocks();
+  renderMFs();
+  renderLog();
 }
+
 function renderBanner(){
-  const tot=capLocal.total||0;
-  const dep=[...(liveData.stocks||[]),...(liveData.mfs||[])].reduce((s,i)=>s+(i._alloc||0),0);
-  const pct=tot>0?Math.round(dep/tot*100):0;
-  const sigs=[...(liveData.stocks||[]),...(liveData.mfs||[])].filter(x=>Number(x.score||0)>=SCORE_BUY).length;
-  set('capTotal',fmt(tot));set('capDeployed',fmt(dep));
-  set('capDeployedPct',pct+'%');set('capRemaining',fmt(Math.max(0,tot-dep)));
-  set('capSignals',String(sigs));
+  const cap = liveData.capital||{};
+  const tot = capLocal.total || Number(cap.total)||0;
+  // deployed may be an object from formula error — coerce safely
+  const dep = typeof cap.deployed==='number' ? cap.deployed :
+              typeof cap.deployed==='object' ? 0 : Number(cap.deployed)||0;
+  const pct = tot>0 ? Math.round(dep/tot*100) : 0;
+  const sigs= [...(liveData.stocks||[]),...(liveData.mfs||[])]
+              .filter(x=>Number(x.score||0)>=SCORE_BUY).length;
+  set('capTotal',    fmt(tot));
+  set('capDeployed', fmt(dep));
+  set('capDeployedPct', pct+'%');
+  set('capRemaining', fmt(Math.max(0,tot-dep)));
+  set('capSignals',  String(sigs));
   document.getElementById('deployedBar').style.width=pct+'%';
 }
 function renderStocks(){
