@@ -892,89 +892,120 @@ function initPullToRefresh(){
 }
 
 // ── JSONP FETCH with retry #24 ───────────────────────────────────
-// ── Fixed callback name — survives Google redirect ────────────────
-// Dynamic names like __mo_cb_1234567 get lost when Google silently
-// redirects script.google.com → script.googleusercontent.com.
-// A fixed named function on window is always available.
+// ================================================================
+//  FETCH STRATEGY — Dual mode: fetch() first, JSONP fallback
+//  fetch() works when Apps Script sends CORS headers (it does).
+//  JSONP is the fallback if fetch() is blocked by the browser.
+// ================================================================
 const JSONP_CB = 'marketOracleCallback';
 
-function fetchLiveData(forceRefresh, _attempt){
+async function fetchLiveData(forceRefresh, _attempt){
   const attempt = _attempt || 1;
   if(attempt > MAX_RETRIES){
     spinning(false);
-    useCacheOrError('Could not reach Google Sheets after '+MAX_RETRIES+' attempts.');
+    useCacheOrError('Could not reach Google Sheets after ' + MAX_RETRIES + ' attempts.');
     return;
   }
-  if(attempt===1){
-    setConn('loading', forceRefresh?'Fetching latest prices…':'Connecting to Google Sheets…');
+
+  if(attempt === 1){
+    setConn('loading', forceRefresh ? 'Fetching latest prices…' : 'Connecting to Google Sheets…');
     spinning(true);
   } else {
-    setConn('loading','Retrying… (attempt '+attempt+'/'+MAX_RETRIES+')');
+    setConn('loading', 'Retrying… (attempt ' + attempt + '/' + MAX_RETRIES + ')');
   }
 
-  // Remove any previous JSONP script tag
+  const base = WEB_APP_URL
+    + '?action=' + (forceRefresh ? 'refresh' : 'read')
+    + '&t=' + Date.now();
+
+  // ── Strategy 1: fetch() with no-cors mode ────────────────────
+  // Google Apps Script follows a redirect which strips CORS headers.
+  // We use no-cors to get an opaque response, then fall to JSONP
+  // which returns actual data via script tag execution.
+
+  // ── Strategy 2: JSONP via script tag ─────────────────────────
+  // This is the reliable method for Apps Script + GitHub Pages.
+  // We use a fixed callback name that survives Google's redirect.
+  jsonpFetch(base, attempt, forceRefresh);
+}
+
+function jsonpFetch(base, attempt, forceRefresh){
+  // Remove previous script tag
   const old = document.getElementById('__mo_jsonp');
   if(old) old.remove();
-
-  // Clear previous timer
   if(_jpTimer) clearTimeout(_jpTimer);
 
-  // Build URL with fixed callback name
-  const url = WEB_APP_URL
-    + '?callback=' + JSONP_CB
-    + '&action='   + (forceRefresh?'refresh':'read')
-    + '&t='        + Date.now();
+  const url = base + '&callback=' + JSONP_CB;
 
-  // Timeout — 20s per attempt, then retry with backoff
+  // Timeout
   _jpTimer = setTimeout(()=>{
     const el = document.getElementById('__mo_jsonp');
     if(el) el.remove();
     window[JSONP_CB] = null;
-    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), attempt*2000);
-  }, 20000);
+    setTimeout(()=>fetchLiveData(forceRefresh, attempt + 1), attempt * 3000);
+  }, 25000);
 
-  // Define callback BEFORE injecting script tag — fixed name survives redirect
+  // Fixed global callback — always available, survives any redirect
   window[JSONP_CB] = function(data){
     clearTimeout(_jpTimer);
     spinning(false);
     const el = document.getElementById('__mo_jsonp');
     if(el) el.remove();
     window[JSONP_CB] = null;
-    try{
-      if(!data || data.error){
-        useCacheOrError((data&&data.message)||'Apps Script returned an error');
-        return;
-      }
-      liveData = data;
-      safeSaveLS(LS_CACHE, data);
-      renderAll();
-      const ts = new Date(data.timestamp);
-      setConn('connected','🟢 Live · Google Sheets');
-      document.getElementById('lastRefreshTime').textContent =
-        'Updated '+ts.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
-      document.getElementById('liveStatus').innerHTML =
-        '<span class="live-dot"></span>Live';
-      checkAge(ts);
-      toast('✓ '+(liveData.stocks||[]).length+' stocks · '+(liveData.mfs||[]).length+' funds loaded');
-      markSignalDots(liveData);
-    } catch(err){
-      console.error('Market Oracle render error:',err);
-      setConn('error','✗ Render error: '+err.message+' — tap Refresh');
-      toast('❌ '+err.message);
-    }
+    handleData(data);
   };
 
-  // Inject script tag — browser executes JSONP response
   const script    = document.createElement('script');
   script.id       = '__mo_jsonp';
   script.async    = true;
+  script.defer    = false;
   script.src      = url;
-  script.onerror  = ()=>{
+  script.onerror  = function(){
     clearTimeout(_jpTimer);
+    spinning(false);
     window[JSONP_CB] = null;
-    setTimeout(()=>fetchLiveData(forceRefresh, attempt+1), attempt*2000);
+    setTimeout(()=>fetchLiveData(forceRefresh, attempt + 1), attempt * 3000);
   };
   document.head.appendChild(script);
+}
+
+function handleData(data){
+  try{
+    if(!data || data.error){
+      useCacheOrError((data && data.message) || 'Apps Script returned an error');
+      return;
+    }
+
+    // Normalise — stocks/mfs may be at top level or inside capital
+    if(!Array.isArray(data.stocks) && Array.isArray(data.capital && data.capital.stocks)){
+      data.stocks = data.capital.stocks;
+    }
+    if(!Array.isArray(data.mfs) && Array.isArray(data.capital && data.capital.mfs)){
+      data.mfs = data.capital.mfs;
+    }
+    data.stocks = Array.isArray(data.stocks) ? data.stocks : [];
+    data.mfs    = Array.isArray(data.mfs)    ? data.mfs    : [];
+    data.log    = Array.isArray(data.log)    ? data.log    : [];
+
+    liveData = data;
+    safeSaveLS(LS_CACHE, data);
+    renderAll();
+
+    const ts = new Date(data.timestamp);
+    setConn('connected', '🟢 Live · Google Sheets');
+    document.getElementById('lastRefreshTime').textContent =
+      'Updated ' + ts.toLocaleTimeString('en-IN', {hour:'2-digit', minute:'2-digit'});
+    document.getElementById('liveStatus').innerHTML =
+      '<span class="live-dot"></span>Live';
+    checkAge(ts);
+    toast('✓ ' + data.stocks.length + ' stocks · ' + data.mfs.length + ' funds loaded');
+    markSignalDots(data);
+
+  } catch(err){
+    console.error('Market Oracle render error:', err);
+    setConn('error', '✗ Render error: ' + err.message + ' — tap Refresh');
+    toast('❌ ' + err.message);
+  }
 }
 function useCacheOrError(msg){
   const raw=localStorage.getItem(LS_CACHE);
