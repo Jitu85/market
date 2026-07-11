@@ -1,0 +1,303 @@
+﻿<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="MARKET ORACLE is an Indian stock and mutual fund analysis dashboard with scoring, alerts, and portfolio tracking."
+    />
+    <meta name="theme-color" content="#071015" />
+    <title>MARKET ORACLE</title>
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <link rel="stylesheet" href="./styles.css?v=4" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#overview" aria-label="MARKET ORACLE overview">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 32 32" role="img">
+              <path d="M6 22.5 14 9l4.4 7.2L22 11l4 11.5H6Z" />
+              <path d="M10.8 22.5h10.4" />
+            </svg>
+          </span>
+          <span>
+            <strong>MARKET ORACLE</strong>
+            <small>Indian Market Intelligence</small>
+          </span>
+        </a>
+
+        <nav class="nav-list" aria-label="Dashboard sections">
+          <a class="nav-item is-active" href="#overview">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 13h6V5H4v8Zm0 6h6v-4H4v4Zm10 0h6v-8h-6v8Zm0-14v4h6V5h-6Z" />
+            </svg>
+            Overview
+          </a>
+          <a class="nav-item" href="#recommendations">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 19V6m0 13h14M9 15l3-3 3 2 4-6" />
+            </svg>
+            Stocks
+          </a>
+          <a class="nav-item" href="#recommendations">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M5 18h14M7 15V9m5 6V5m5 10v-4" />
+            </svg>
+            Mutual Funds
+          </a>
+          <a class="nav-item" href="#portfolio">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 19h16M7 16V8l5-3 5 3v8M9 16v-5h6v5" />
+            </svg>
+            Portfolio
+          </a>
+          <a class="nav-item" href="#alerts">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 17h12l-1.5-2.5V11a4.5 4.5 0 0 0-9 0v3.5L6 17Zm4 0a2 2 0 0 0 4 0" />
+            </svg>
+            Alerts
+          </a>
+          <a class="nav-item" href="#logs">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M7 7h10M7 12h10M7 17h6" />
+            </svg>
+            Logs
+          </a>
+          <a class="nav-item" href="#settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z" />
+              <path d="m4.8 13.8 1.6 2.8 3.2-.7m4.8 0 3.2.7 1.6-2.8-2.2-2.4m0-2.8 2.2-2.4-1.6-2.8-3.2.7m-4.8 0-3.2-.7L4.8 6.2 7 8.6" />
+            </svg>
+            Settings
+          </a>
+        </nav>
+
+        <div class="designer-credit">
+          <span>Designed &amp; Developed by</span>
+          <strong>ABHIJIT KUMAR MISRA</strong>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <p class="page-label">Live analysis console</p>
+            <h1>Market command center</h1>
+          </div>
+          <div class="topbar-actions">
+            <div class="status-pill" role="status">
+              <span class="status-dot" aria-hidden="true"></span>
+              <span id="marketStatus">Market Open</span>
+            </div>
+            <span class="last-refresh" id="lastRefresh">Updated 09:48 IST</span>
+            <button class="icon-button" id="themeToggle" type="button" aria-label="Toggle light and dark theme">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 4a8 8 0 1 0 8 8 6 6 0 0 1-8-8Z" />
+              </svg>
+            </button>
+            <button class="primary-button" id="refreshButton" type="button">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 12a8 8 0 0 1-14.2 5M4 12A8 8 0 0 1 18.2 7M18 3v4h-4M6 21v-4h4" />
+              </svg>
+              Refresh
+            </button>
+          </div>
+        </header>
+
+        <section class="metrics" id="overview" aria-label="Market overview">
+          <article class="metric-card">
+            <div>
+              <span>NIFTY 50</span>
+              <strong>24,742.10</strong>
+              <small class="positive">+0.64% today</small>
+            </div>
+            <svg class="sparkline" viewBox="0 0 120 48" aria-hidden="true">
+              <path d="M4 36 C18 31, 20 20, 34 24 S53 38, 65 27 84 14, 96 18 111 11, 116 8" />
+            </svg>
+          </article>
+          <article class="metric-card">
+            <div>
+              <span>SENSEX</span>
+              <strong>80,981.40</strong>
+              <small class="positive">+0.51% today</small>
+            </div>
+            <svg class="sparkline" viewBox="0 0 120 48" aria-hidden="true">
+              <path d="M4 32 C18 28, 24 34, 35 24 S52 16, 64 22 78 34, 91 20 104 18, 116 10" />
+            </svg>
+          </article>
+          <article class="metric-card">
+            <div>
+              <span>Oracle Score</span>
+              <strong id="averageScore">82.4</strong>
+              <small>Top universe average</small>
+            </div>
+            <div class="score-ring" style="--score: 82">
+              <span>82</span>
+            </div>
+          </article>
+          <article class="metric-card">
+            <div>
+              <span>Automated Refresh</span>
+              <strong id="refreshCountdown">14 min</strong>
+              <small>Apps Script scheduler</small>
+            </div>
+            <div class="refresh-meter" aria-hidden="true"><span></span></div>
+          </article>
+        </section>
+
+        <div class="content-grid">
+          <section class="panel recommendations-panel" id="recommendations">
+            <div class="panel-header">
+              <div>
+                <p class="section-label">Smart Recommendations</p>
+                <h2>Best opportunities now</h2>
+              </div>
+              <div class="tools">
+                <label class="search">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m21 21-4.4-4.4M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" />
+                  </svg>
+                  <input id="searchInput" type="search" placeholder="Search symbol or fund" />
+                </label>
+                <div class="segment" role="tablist" aria-label="Recommendation filter">
+                  <button class="is-active" type="button" data-filter="all">All</button>
+                  <button type="button" data-filter="stock">Stocks</button>
+                  <button type="button" data-filter="fund">Funds</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col">Instrument</th>
+                    <th scope="col">Type</th>
+                    <th scope="col">Price / NAV</th>
+                    <th scope="col">1D</th>
+                    <th scope="col">Score</th>
+                    <th scope="col">Signal</th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="recommendationRows"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <aside class="right-rail" aria-label="Signal details and portfolio">
+            <section class="panel signal-panel" aria-live="polite">
+              <div class="panel-header compact">
+                <div>
+                  <p class="section-label">Signal Detail</p>
+                  <h2 id="detailName">Reliance Industries</h2>
+                </div>
+                <span class="signal-badge" id="detailSignal">Buy</span>
+              </div>
+              <div class="detail-price">
+                <span id="detailSymbol">RELIANCE</span>
+                <strong id="detailPrice">₹2,940.25</strong>
+                <small id="detailMove" class="positive">+1.20%</small>
+              </div>
+              <div class="indicator-grid">
+                <div>
+                  <span>RSI</span>
+                  <strong id="rsiValue">58</strong>
+                </div>
+                <div>
+                  <span>MACD</span>
+                  <strong id="macdValue">Bullish</strong>
+                </div>
+                <div>
+                  <span>P/E</span>
+                  <strong id="peValue">27.4</strong>
+                </div>
+                <div>
+                  <span>Debt</span>
+                  <strong id="debtValue">Low</strong>
+                </div>
+              </div>
+              <div class="score-breakdown">
+                <div>
+                  <span>Technical</span>
+                  <meter id="technicalMeter" min="0" max="100" value="84"></meter>
+                </div>
+                <div>
+                  <span>Fundamental</span>
+                  <meter id="fundamentalMeter" min="0" max="100" value="78"></meter>
+                </div>
+                <div>
+                  <span>Risk Control</span>
+                  <meter id="riskMeter" min="0" max="100" value="81"></meter>
+                </div>
+              </div>
+              <button class="secondary-button" id="watchButton" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 5.5 14 9.8l4.7.7-3.4 3.4.8 4.7-4.1-2.2-4.1 2.2.8-4.7-3.4-3.4 4.7-.7L12 5.5Z" />
+                </svg>
+                Add to Watchlist
+              </button>
+            </section>
+
+            <section class="panel allocation-panel" id="portfolio">
+              <div class="panel-header compact">
+                <div>
+                  <p class="section-label">Portfolio Tracker</p>
+                  <h2>Allocation</h2>
+                </div>
+                <strong class="portfolio-value">₹8.42L</strong>
+              </div>
+              <div class="allocation-list" id="allocationList"></div>
+            </section>
+          </aside>
+        </div>
+
+        <div class="bottom-grid">
+          <section class="panel" id="alerts">
+            <div class="panel-header compact">
+              <div>
+                <p class="section-label">Alerts</p>
+                <h2>Triggered rules</h2>
+              </div>
+              <button class="ghost-button" id="clearAlertsButton" type="button">Clear read</button>
+            </div>
+            <div class="alert-list" id="alertList"></div>
+          </section>
+
+          <section class="panel" id="logs">
+            <div class="panel-header compact">
+              <div>
+                <p class="section-label">Scheduler</p>
+                <h2>Automation log</h2>
+              </div>
+              <span class="sync-state">Firebase synced</span>
+            </div>
+            <ol class="log-list" id="logList"></ol>
+          </section>
+
+          <section class="panel" id="settings">
+            <div class="panel-header compact">
+              <div>
+                <p class="section-label">Firebase Runtime</p>
+                <h2>Data map</h2>
+              </div>
+            </div>
+            <div class="data-map" aria-label="Firebase Realtime Database structure">
+              <span>marketOracle</span>
+              <span>indices</span>
+              <span>stocks</span>
+              <span>mutualFunds</span>
+              <span>alerts</span>
+              <span>logs</span>
+              <span>settings</span>
+            </div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="./app.js?v=4" defer></script>
+  </body>
+</html>

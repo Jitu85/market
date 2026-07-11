@@ -1,0 +1,17 @@
+{
+  "name": "MARKET ORACLE",
+  "short_name": "Market Oracle",
+  "description": "Indian stock and mutual fund analysis dashboard.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#071015",
+  "theme_color": "#071015",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
