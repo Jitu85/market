@@ -117,7 +117,7 @@ function setupMarketData() {
 
   var range = sheet.getDataRange();
   var values = range.getDisplayValues();
-  if (values.length < 2) throw new Error("Recommendations has no data rows");
+  if (values.length < 1) throw new Error("Recommendations has no header row");
   var headers = values[0].map(function (header) { return String(header).trim().toLowerCase(); });
   var symbolColumn = headers.indexOf("symbol") + 1;
   var typeColumn = headers.indexOf("type") + 1;
@@ -127,6 +127,9 @@ function setupMarketData() {
     throw new Error("Recommendations must contain symbol, type, price, and move headers");
   }
 
+
+  addRequestedFunds_(sheet, headers);
+  values = sheet.getDataRange().getDisplayValues();
   for (var row = 2; row <= values.length; row++) {
     var type = String(sheet.getRange(row, typeColumn).getDisplayValue() || "stock").toLowerCase();
     if (type !== "stock") continue;
@@ -136,6 +139,46 @@ function setupMarketData() {
   }
   SpreadsheetApp.flush();
 }
+function addRequestedFunds_(sheet, headers) {
+  var symbolIndex = headers.indexOf("symbol");
+  var existing = {};
+  sheet.getDataRange().getDisplayValues().slice(1).forEach(function (row) {
+    existing[String(row[symbolIndex] || "").trim().toUpperCase()] = true;
+  });
+
+  var funds = [
+    {
+      id: "sbi-gold-direct",
+      name: "SBI Gold Fund - Direct Plan - Growth",
+      symbol: "SBIGOLD",
+      type: "fund",
+      schemecode: "119788",
+      move: 0,
+      score: 0,
+      signal: "Watch",
+      macd: "NAV",
+    },
+    {
+      id: "jio-flexicap-direct",
+      name: "JioBlackRock Flexi Cap Fund - Direct Plan - Growth Option",
+      symbol: "JIOFLEXI",
+      type: "fund",
+      schemecode: "153859",
+      move: 0,
+      score: 0,
+      signal: "Watch",
+      macd: "NAV",
+    },
+  ];
+
+  funds.forEach(function (fund) {
+    if (existing[fund.symbol]) return;
+    sheet.appendRow(headers.map(function (header) {
+      return Object.prototype.hasOwnProperty.call(fund, header) ? fund[header] : "";
+    }));
+  });
+}
+
 function fetchAmfiNav_(schemeCodes) {
   var cache = CacheService.getScriptCache();
   var result = {};
@@ -219,6 +262,7 @@ function json_(value) {
   return ContentService.createTextOutput(JSON.stringify(value))
     .setMimeType(ContentService.MimeType.JSON);
 }
+
 
 
 

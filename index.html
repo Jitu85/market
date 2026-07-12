@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#071015" />
     <title>MARKET ORACLE</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=7" />
+    <link rel="stylesheet" href="./styles.css?v=8" />
   </head>
   <body>
     <div class="app-shell">
@@ -35,13 +35,13 @@
             </svg>
             Overview
           </a>
-          <a class="nav-item" href="#recommendations">
+          <a class="nav-item" href="#recommendations" data-nav-filter="stock">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 19V6m0 13h14M9 15l3-3 3 2 4-6" />
             </svg>
             Stocks
           </a>
-          <a class="nav-item" href="#recommendations">
+          <a class="nav-item" href="#recommendations" data-nav-filter="fund">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M5 18h14M7 15V9m5 6V5m5 10v-4" />
             </svg>
@@ -330,9 +330,12 @@
     </div>
 
     <script src="./config.js?v=5"></script>
-    <script src="./app.js?v=7" defer></script>
+    <script src="./app.js?v=8" defer></script>
   </body>
 </html>
+
+
+
 
 
 

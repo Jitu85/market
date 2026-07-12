@@ -30,3 +30,9 @@ The two original sample funds are treated as Regular Growth plans unless a diffe
 
 Set an explicit scheme code to use a Direct or IDCW variant.
 
+
+Requested Direct Growth funds added by `setupMarketData`:
+
+- SBI Gold Fund - Direct Plan - Growth: `119788`
+- JioBlackRock Flexi Cap Fund - Direct Plan - Growth Option: `153859`
+

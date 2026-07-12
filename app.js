@@ -51,6 +51,47 @@
     risk: 88,
   },
   {
+    id: "sbi-gold-direct",
+    name: "SBI Gold Fund – Direct Growth",
+    symbol: "SBIGOLD",
+    schemeCode: "119788",
+    type: "fund",
+    price: "₹43.6402",
+    move: 0,
+    score: 0,
+    signal: "Watch",
+    rsi: 0,
+    macd: "NAV",
+    pe: "—",
+    debt: "—",
+    technical: 0,
+    fundamental: 0,
+    risk: 0,
+    marketSource: "AMFI",
+    marketStatus: "official-eod-nav",
+    marketUpdatedAt: "10-Jul-2026",
+  },
+  {
+    id: "jio-flexicap-direct",
+    name: "JioBlackRock Flexi Cap – Direct Growth",
+    symbol: "JIOFLEXI",
+    schemeCode: "153859",
+    type: "fund",
+    price: "₹10.0081",
+    move: 0,
+    score: 0,
+    signal: "Watch",
+    rsi: 0,
+    macd: "NAV",
+    pe: "—",
+    debt: "—",
+    technical: 0,
+    fundamental: 0,
+    risk: 0,
+    marketSource: "AMFI",
+    marketStatus: "official-eod-nav",
+    marketUpdatedAt: "10-Jul-2026",
+  },  {
     id: "tcs",
     name: "Tata Consultancy Services",
     symbol: "TCS",
@@ -156,6 +197,8 @@ const alertList = document.querySelector("#alertList");
 const logList = document.querySelector("#logList");
 const searchInput = document.querySelector("#searchInput");
 const filterButtons = document.querySelectorAll("[data-filter]");
+const navFilterLinks = document.querySelectorAll("[data-nav-filter]");
+const navItems = document.querySelectorAll(".nav-item");
 const refreshButton = document.querySelector("#refreshButton");
 const themeToggle = document.querySelector("#themeToggle");
 const lastRefresh = document.querySelector("#lastRefresh");
@@ -446,12 +489,20 @@ rows.addEventListener("keydown", (event) => {
   setSelected(row.dataset.id);
 });
 
+function applyRecommendationFilter(filter) {
+  activeFilter = filter;
+  filterButtons.forEach((button) => button.classList.toggle("is-active", button.dataset.filter === filter));
+  navItems.forEach((link) => link.classList.remove("is-active"));
+  navFilterLinks.forEach((link) => link.classList.toggle("is-active", link.dataset.navFilter === filter));
+  renderRecommendations();
+}
+
 filterButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    activeFilter = button.dataset.filter;
-    filterButtons.forEach((entry) => entry.classList.toggle("is-active", entry === button));
-    renderRecommendations();
-  });
+  button.addEventListener("click", () => applyRecommendationFilter(button.dataset.filter));
+});
+
+navFilterLinks.forEach((link) => {
+  link.addEventListener("click", () => applyRecommendationFilter(link.dataset.navFilter));
 });
 
 searchInput.addEventListener("input", renderRecommendations);
@@ -492,7 +543,7 @@ clearAlertsButton.addEventListener("click", () => {
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=7").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=8").catch(() => {});
   });
 }
 
@@ -512,6 +563,9 @@ syncGoogleSheets().catch((error) => {
   syncState.textContent = "Sheets sync failed · showing sample data";
   syncState.title = error.message;
 });
+
+
+
 
 
 
