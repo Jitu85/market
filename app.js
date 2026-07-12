@@ -35,7 +35,7 @@
   },
   {
     id: "ppfas",
-    name: "Parag Parikh Flexi Cap",
+    name: "Parag Parikh Flexi Cap – Regular Growth",
     symbol: "PPFAS",
     type: "fund",
     price: "₹82.14",
@@ -69,7 +69,7 @@
   },
   {
     id: "uti",
-    name: "UTI Nifty 50 Index Fund",
+    name: "UTI Nifty 50 Index – Regular Growth",
     symbol: "UTINIFTY",
     type: "fund",
     price: "₹168.43",
@@ -163,6 +163,9 @@ const watchButton = document.querySelector("#watchButton");
 const clearAlertsButton = document.querySelector("#clearAlertsButton");
 const averageScore = document.querySelector("#averageScore");
 const syncState = document.querySelector("#syncState");
+const marketStatus = document.querySelector("#marketStatus");
+const statusDot = document.querySelector(".status-dot");
+const refreshCountdown = document.querySelector("#refreshCountdown");
 const sheetsEndpoint = String(window.MARKET_ORACLE_CONFIG?.googleSheetsEndpoint || "").trim();
 
 let selectedId = recommendations[0].id;
@@ -210,6 +213,9 @@ function recommendationFrom(row, index) {
     technical: numberFrom(row.technical ?? row.Technical),
     fundamental: numberFrom(row.fundamental ?? row.Fundamental),
     risk: numberFrom(row.risk ?? row.Risk),
+    marketSource: String(row.marketSource || ""),
+    marketStatus: String(row.marketStatus || "sample"),
+    marketUpdatedAt: String(row.marketUpdatedAt || ""),
   };
 }
 
@@ -241,8 +247,44 @@ async function syncGoogleSheets() {
   const updated = payload.updatedAt ? new Date(payload.updatedAt) : new Date();
   const time = Number.isNaN(updated.getTime()) ? "now" : updated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
   lastRefresh.textContent = `Updated ${time} IST`;
-  syncState.textContent = "Google Sheets synced";
-  syncState.removeAttribute("title");
+  const errorCount = Array.isArray(payload.marketData?.errors) ? payload.marketData.errors.length : 0;
+  syncState.textContent = errorCount ? `Synced · ${errorCount} fallback` : "NSE + AMFI synced";
+  if (errorCount) syncState.title = payload.marketData.errors.join("\n");
+  else syncState.removeAttribute("title");
+}
+
+function updateMarketStatus() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: "Asia/Kolkata",
+      weekday: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(new Date()).filter((part) => part.type !== "literal").map((part) => [part.type, part.value]),
+  );
+  const minute = Number(parts.hour) * 60 + Number(parts.minute);
+  const weekday = parts.weekday;
+  const isWeekday = !["Sat", "Sun"].includes(weekday);
+  const isOpen = isWeekday && minute >= 555 && minute < 930;
+  marketStatus.textContent = isOpen ? "Market Open" : "Market Closed";
+  statusDot.classList.toggle("is-closed", !isOpen);
+}
+
+let nextAutomaticSync = Date.now() + 5 * 60 * 1000;
+function updateRefreshCountdown() {
+  const remaining = Math.max(0, nextAutomaticSync - Date.now());
+  const minutes = Math.floor(remaining / 60000);
+  const seconds = Math.floor((remaining % 60000) / 1000);
+  refreshCountdown.textContent = `${minutes}:${String(seconds).padStart(2, "0")}`;
+  if (remaining === 0) {
+    nextAutomaticSync = Date.now() + 5 * 60 * 1000;
+    syncGoogleSheets().catch((error) => {
+      console.error("Automatic market sync failed", error);
+      syncState.textContent = "Auto-sync failed · showing last data";
+      syncState.title = error.message;
+    });
+  }
 }
 function buildCell(tag, className, text) {
   const element = document.createElement(tag);
@@ -276,7 +318,15 @@ function renderRecommendations() {
     const type = document.createElement("td");
     type.append(buildCell("span", "type-chip", item.type === "stock" ? "Stock" : "Mutual Fund"));
 
-    const price = buildCell("td", "", item.price);
+    const price = document.createElement("td");
+    price.className = "market-price";
+    price.append(buildCell("strong", "", item.price));
+    if (item.marketSource) {
+      const source = buildCell("small", "quote-source", item.marketSource);
+      if (item.marketStatus === "fallback-sheet-value") source.classList.add("is-fallback");
+      source.title = item.marketUpdatedAt || item.marketStatus;
+      price.append(source);
+    }
     const move = buildCell("td", moveClass(item.move), formatMove(item.move));
     const score = buildCell("td", "", String(item.score));
 
@@ -452,11 +502,19 @@ renderAllocation();
 renderAlerts();
 renderLogs();
 
+updateMarketStatus();
+updateRefreshCountdown();
+window.setInterval(updateMarketStatus, 60 * 1000);
+window.setInterval(updateRefreshCountdown, 1000);
+
 syncGoogleSheets().catch((error) => {
   console.error("Google Sheets sync failed", error);
   syncState.textContent = "Sheets sync failed · showing sample data";
   syncState.title = error.message;
 });
+
+
+
 
 
 

@@ -1233,3 +1233,34 @@ tbody tr:hover { transform: translateX(2px); }
   .metric-card { min-height: 120px; }
   .topbar-actions .status-pill, .topbar-actions .primary-button { flex: 1; }
 }
+
+.market-price strong {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+}
+.quote-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  color: var(--emerald-2);
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.quote-source::before {
+  content: "";
+  width: 5px;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--emerald);
+}
+.quote-source.is-fallback { color: var(--amber); }
+.quote-source.is-fallback::before { background: var(--amber); }
+
+.status-dot.is-closed {
+  background: #94a3a0;
+  box-shadow: 0 0 0 4px rgba(148, 163, 160, 0.15);
+}
