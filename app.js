@@ -492,7 +492,7 @@ clearAlertsButton.addEventListener("click", () => {
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=6").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=7").catch(() => {});
   });
 }
 
@@ -512,6 +512,7 @@ syncGoogleSheets().catch((error) => {
   syncState.textContent = "Sheets sync failed · showing sample data";
   syncState.title = error.message;
 });
+
 
 
 

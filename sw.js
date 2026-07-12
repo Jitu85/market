@@ -1,4 +1,4 @@
-﻿const CACHE_NAME = "market-oracle-v6";
+﻿const CACHE_NAME = "market-oracle-v7";
 const ASSETS = [
   "./",
   "./index.html",
@@ -36,4 +36,5 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(event.request)),
   );
 });
+
 
