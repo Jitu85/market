@@ -1,9 +1,10 @@
-﻿const CACHE_NAME = "market-oracle-v4";
+﻿const CACHE_NAME = "market-oracle-v6";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./app.js",
+  "./config.js",
   "./manifest.webmanifest",
   "./icon.svg",
 ];
@@ -35,3 +36,4 @@ self.addEventListener("fetch", (event) => {
       .catch(() => caches.match(event.request)),
   );
 });
+

@@ -10,7 +10,7 @@
     <meta name="theme-color" content="#071015" />
     <title>MARKET ORACLE</title>
     <link rel="manifest" href="./manifest.webmanifest" />
-    <link rel="stylesheet" href="./styles.css?v=4" />
+    <link rel="stylesheet" href="./styles.css?v=6" />
   </head>
   <body>
     <div class="app-shell">
@@ -106,6 +106,37 @@
           </div>
         </header>
 
+        <section class="market-hero" aria-labelledby="marketHeroTitle">
+          <div class="hero-copy">
+            <div class="eyebrow"><span></span> Intelligence briefing</div>
+            <h2 id="marketHeroTitle">Clarity for your next<br /><em>market move.</em></h2>
+            <p>Signals, fundamentals, and portfolio context—brought together in one focused view.</p>
+            <div class="hero-actions">
+              <a class="hero-primary" href="#recommendations">Explore opportunities</a>
+              <a class="hero-link" href="#portfolio">View portfolio <span aria-hidden="true">→</span></a>
+            </div>
+          </div>
+          <div class="hero-pulse" aria-label="Market breadth summary">
+            <div class="pulse-head">
+              <span>Market pulse</span>
+              <strong>Positive breadth</strong>
+            </div>
+            <div class="breadth-bar" aria-hidden="true">
+              <span class="advance" style="width: 64%"></span>
+              <span class="neutral-width" style="width: 11%"></span>
+              <span class="decline" style="width: 25%"></span>
+            </div>
+            <div class="breadth-legend">
+              <span><i class="up"></i><strong>64%</strong> Advances</span>
+              <span><i class="flat"></i><strong>11%</strong> Flat</span>
+              <span><i class="down"></i><strong>25%</strong> Declines</span>
+            </div>
+            <div class="hero-verdict">
+              <span class="verdict-icon">↗</span>
+              <div><small>Oracle view</small><strong>Momentum remains constructive</strong></div>
+            </div>
+          </div>
+        </section>
         <section class="metrics" id="overview" aria-label="Market overview">
           <article class="metric-card">
             <div>
@@ -272,7 +303,7 @@
                 <p class="section-label">Scheduler</p>
                 <h2>Automation log</h2>
               </div>
-              <span class="sync-state">Firebase synced</span>
+              <span class="sync-state" id="syncState" role="status">Sample data</span>
             </div>
             <ol class="log-list" id="logList"></ol>
           </section>
@@ -280,24 +311,28 @@
           <section class="panel" id="settings">
             <div class="panel-header compact">
               <div>
-                <p class="section-label">Firebase Runtime</p>
-                <h2>Data map</h2>
+                <p class="section-label">Data Sources</p>
+                <h2>Connected intelligence</h2>
               </div>
             </div>
-            <div class="data-map" aria-label="Firebase Realtime Database structure">
-              <span>marketOracle</span>
+            <div class="data-map" aria-label="Connected data sources">
+              <span class="is-connected">Google Sheets</span>
               <span>indices</span>
               <span>stocks</span>
               <span>mutualFunds</span>
               <span>alerts</span>
               <span>logs</span>
-              <span>settings</span>
+              <span>Apps Script</span>
             </div>
           </section>
         </div>
       </main>
     </div>
 
-    <script src="./app.js?v=4" defer></script>
+    <script src="./config.js?v=5"></script>
+    <script src="./app.js?v=6" defer></script>
   </body>
 </html>
+
+
+

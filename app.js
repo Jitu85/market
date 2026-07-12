@@ -1,4 +1,4 @@
-﻿const recommendations = [
+﻿let recommendations = [
   {
     id: "reliance",
     name: "Reliance Industries",
@@ -103,14 +103,14 @@
   },
 ];
 
-const allocation = [
+let allocation = [
   { label: "Large Cap", value: 42, color: "#11b981" },
   { label: "Flexi Cap", value: 24, color: "#22c7dc" },
   { label: "Debt Funds", value: 18, color: "#d99116" },
   { label: "Cash", value: 16, color: "#687982" },
 ];
 
-const alerts = [
+let alerts = [
   {
     id: "alert-1",
     title: "RELIANCE crossed Oracle Score 85",
@@ -131,7 +131,7 @@ const alerts = [
   },
 ];
 
-const logs = [
+let logs = [
   { time: "09:45", title: "FetchStocks.gs completed", detail: "6 instruments updated from market API." },
   { time: "09:46", title: "Indicators.gs completed", detail: "RSI, MACD, moving averages recalculated." },
   { time: "09:47", title: "Scoring.gs completed", detail: "Oracle Score generated and stored in Firebase." },
@@ -161,6 +161,9 @@ const themeToggle = document.querySelector("#themeToggle");
 const lastRefresh = document.querySelector("#lastRefresh");
 const watchButton = document.querySelector("#watchButton");
 const clearAlertsButton = document.querySelector("#clearAlertsButton");
+const averageScore = document.querySelector("#averageScore");
+const syncState = document.querySelector("#syncState");
+const sheetsEndpoint = String(window.MARKET_ORACLE_CONFIG?.googleSheetsEndpoint || "").trim();
 
 let selectedId = recommendations[0].id;
 let activeFilter = "all";
@@ -182,6 +185,65 @@ function formatMove(move) {
   return `${prefix}${move.toFixed(2)}%`;
 }
 
+function numberFrom(value, fallback = 0) {
+  const parsed = Number(String(value ?? "").replace(/[₹,%\s,]/g, ""));
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function recommendationFrom(row, index) {
+  const symbol = String(row.symbol || row.Symbol || "").trim().toUpperCase();
+  const name = String(row.name || row.Name || symbol).trim();
+  if (!symbol || !name) return null;
+  const rawPrice = row.price ?? row.Price ?? 0;
+  return {
+    id: String(row.id || row.ID || symbol || index).toLowerCase().replace(/[^a-z0-9_-]/g, "-"),
+    name, symbol,
+    type: String(row.type || row.Type || "stock").toLowerCase() === "fund" ? "fund" : "stock",
+    price: String(rawPrice).includes("₹") ? String(rawPrice) : numberFrom(rawPrice).toLocaleString("en-IN", { style: "currency", currency: "INR" }),
+    move: numberFrom(row.move ?? row.Move),
+    score: numberFrom(row.score ?? row.Score),
+    signal: String(row.signal || row.Signal || "Watch"),
+    rsi: numberFrom(row.rsi ?? row.RSI),
+    macd: String(row.macd || row.MACD || "Neutral"),
+    pe: String(row.pe ?? row.PE ?? "—"),
+    debt: String(row.debt || row.Debt || "—"),
+    technical: numberFrom(row.technical ?? row.Technical),
+    fundamental: numberFrom(row.fundamental ?? row.Fundamental),
+    risk: numberFrom(row.risk ?? row.Risk),
+  };
+}
+
+async function syncGoogleSheets() {
+  if (!sheetsEndpoint) {
+    syncState.textContent = "Sample data · add endpoint in config.js";
+    return;
+  }
+  syncState.textContent = "Syncing Google Sheets…";
+  const joiner = sheetsEndpoint.includes("?") ? "&" : "?";
+  const response = await fetch(`${sheetsEndpoint}${joiner}t=${Date.now()}`, { cache: "no-store", headers: { Accept: "application/json" } });
+  if (!response.ok) throw new Error(`Google Sheets returned HTTP ${response.status}`);
+  const payload = await response.json();
+  if (payload.error) throw new Error(payload.error);
+  const rows = Array.isArray(payload) ? payload : payload.recommendations;
+  if (!Array.isArray(rows)) throw new Error("Response is missing a recommendations array");
+  const imported = rows.map(recommendationFrom).filter(Boolean);
+  if (!imported.length) throw new Error("Google Sheet contains no valid recommendation rows");
+  recommendations = imported;
+  averageScore.textContent = (recommendations.reduce((sum, item) => sum + item.score, 0) / recommendations.length).toFixed(1);
+  if (Array.isArray(payload.allocation)) allocation = payload.allocation;
+  if (Array.isArray(payload.alerts)) alerts = payload.alerts;
+  if (Array.isArray(payload.logs)) logs = payload.logs;
+  selectedId = recommendations.some((item) => item.id === selectedId) ? selectedId : recommendations[0].id;
+  hiddenAlerts = new Set();
+  renderRecommendations();
+  renderDetail(recommendations.find((item) => item.id === selectedId));
+  renderAllocation(); renderAlerts(); renderLogs();
+  const updated = payload.updatedAt ? new Date(payload.updatedAt) : new Date();
+  const time = Number.isNaN(updated.getTime()) ? "now" : updated.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+  lastRefresh.textContent = `Updated ${time} IST`;
+  syncState.textContent = "Google Sheets synced";
+  syncState.removeAttribute("title");
+}
 function buildCell(tag, className, text) {
   const element = document.createElement(tag);
   if (className) element.className = className;
@@ -344,20 +406,19 @@ filterButtons.forEach((button) => {
 
 searchInput.addEventListener("input", renderRecommendations);
 
-refreshButton.addEventListener("click", () => {
+refreshButton.addEventListener("click", async () => {
   refreshButton.classList.add("is-loading");
   refreshButton.disabled = true;
-  window.setTimeout(() => {
-    const now = new Date();
-    lastRefresh.textContent = `Updated ${now.toLocaleTimeString("en-IN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-      timeZone: "Asia/Kolkata",
-    })} IST`;
+  try {
+    await syncGoogleSheets();
+  } catch (error) {
+    console.error("Google Sheets sync failed", error);
+    syncState.textContent = "Sheets sync failed · showing cached data";
+    syncState.title = error.message;
+  } finally {
     refreshButton.classList.remove("is-loading");
     refreshButton.disabled = false;
-  }, 700);
+  }
 });
 
 themeToggle.addEventListener("click", () => {
@@ -381,7 +442,7 @@ clearAlertsButton.addEventListener("click", () => {
 
 if ("serviceWorker" in navigator && location.protocol !== "file:") {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js?v=4").catch(() => {});
+    navigator.serviceWorker.register("./sw.js?v=6").catch(() => {});
   });
 }
 
@@ -390,3 +451,12 @@ renderDetail(recommendations[0]);
 renderAllocation();
 renderAlerts();
 renderLogs();
+
+syncGoogleSheets().catch((error) => {
+  console.error("Google Sheets sync failed", error);
+  syncState.textContent = "Sheets sync failed · showing sample data";
+  syncState.title = error.message;
+});
+
+
+
